@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>更新所有图标</title>
+</head>
+<body>
+    <h1>更新所有网站图标</h1>
+    <button onclick="updateAllIcons()">点击更新所有图标</button>
+    <div id="result"></div>
+
+    <script>
+        async function updateAllIcons() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p>正在更新...</p>';
+            
+            try {
+                const response = await fetch('/api/admin/update-icons', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                resultDiv.innerHTML = `
+                    <p style="color: green;">更新成功！</p>
+                    <p>总数: ${data.total}</p>
+                    <p>已更新: ${data.updated}</p>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `<p style="color: red;">更新失败: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

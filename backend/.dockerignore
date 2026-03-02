@@ -1,0 +1,5 @@
+nav-backend
+nav.db
+*.log
+.DS_Store
+.env

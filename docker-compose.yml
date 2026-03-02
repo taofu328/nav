@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nav-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_PATH=/data/nav.db
+      - JWT_SECRET=your-secret-key-change-this-in-production
+      - PORT=8080
+    volumes:
+      - nav-data:/data
+    restart: unless-stopped
+    networks:
+      - nav-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nav-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - nav-network
+
+volumes:
+  nav-data:
+    driver: local
+
+networks:
+  nav-network:
+    driver: bridge
