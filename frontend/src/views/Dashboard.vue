@@ -348,7 +348,9 @@ const handleBookmarkAction = async (command, bookmark) => {
   } else if (command === 'delete') {
     try {
       await ElMessageBox.confirm('确定要删除这个网址吗？', '确认删除', {
-        type: 'warning'
+        type: 'warning',
+        confirmButtonText: '确定',
+        cancelButtonText: '取消'
       })
       await api.delete(`/bookmarks/${bookmark.id}`)
       ElMessage.success('删除成功')
@@ -398,7 +400,9 @@ const handleCategoryAction = async (command, category) => {
   } else if (command === 'delete') {
     try {
       await ElMessageBox.confirm('确定要删除这个分类吗？分类下的网址也会被删除。', '确认删除', {
-        type: 'warning'
+        type: 'warning',
+        confirmButtonText: '确定',
+        cancelButtonText: '取消'
       })
       await api.delete(`/categories/${category.id}`)
       ElMessage.success('删除成功')

@@ -44,5 +44,5 @@ type Bookmark struct {
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
 	User        User           `json:"-" gorm:"foreignKey:UserID"`
-	Category    Category       `json:"-" gorm:"foreignKey:CategoryID"`
+	Category    Category       `json:"category" gorm:"foreignKey:CategoryID"`
 }

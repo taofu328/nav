@@ -10,11 +10,10 @@ import (
 
 func GetBookmarks(c *gin.Context) {
 	var bookmarks []models.Bookmark
-	if err := database.DB.Order("sort_order ASC, created_at ASC").Find(&bookmarks).Error; err != nil {
+	if err := database.DB.Order("sort_order ASC, created_at ASC").Preload("Category").Find(&bookmarks).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Failed to fetch bookmarks"})
 		return
 	}
-
 	c.JSON(200, bookmarks)
 }
 

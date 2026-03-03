@@ -48,7 +48,7 @@
                   @change="handleCategoryChange"
                   @clear="handleCategoryClear"
                 >
-                  <el-option label="全部" :value="null" />
+                  <el-option label="全部" value="" />
                   <el-option
                     v-for="category in categories"
                     :key="category.id"
@@ -385,7 +385,7 @@ const categoryRules = {
 const filteredBookmarks = computed(() => {
   let result = bookmarks.value
   
-  if (selectedCategory.value !== null && selectedCategory.value !== undefined) {
+  if (selectedCategory.value !== null && selectedCategory.value !== undefined && selectedCategory.value !== '') {
     result = result.filter(bookmark => bookmark.category_id === selectedCategory.value)
   }
   
@@ -473,7 +473,6 @@ const handleBatchCommand = async (command) => {
 const handlePageChange = (page) => {
   currentPage.value = page
   selectedBookmarks.value = []
-  isAllSelected.value = false
 }
 
 const saveBookmark = async () => {
@@ -505,7 +504,9 @@ const saveBookmark = async () => {
 const deleteBookmark = async (bookmark) => {
   try {
     await ElMessageBox.confirm(`确定要删除网址"${bookmark.title}"吗？`, '确认删除', {
-      type: 'warning'
+      type: 'warning',
+      confirmButtonText: '确定',
+      cancelButtonText: '取消'
     })
     await api.delete(`/bookmarks/${bookmark.id}`)
     ElMessage.success('删除成功')
@@ -525,7 +526,9 @@ const batchDeleteBookmarks = async () => {
 
   try {
     await ElMessageBox.confirm(`确定要删除选中的 ${selectedBookmarks.value.length} 个网址吗？`, '确认删除', {
-      type: 'warning'
+      type: 'warning',
+      confirmButtonText: '确定',
+      cancelButtonText: '取消'
     })
 
     batchLoading.value = true
@@ -544,9 +547,14 @@ const batchDeleteBookmarks = async () => {
 
     batchLoading.value = false
     selectedBookmarks.value = []
-    isAllSelected.value = false
 
-    ElMessage.success(`删除成功：${successCount} 个，失败：${failCount} 个`)
+    ElNotification({
+      title: '批量删除完成',
+      message: `成功删除 ${successCount} 个网址，失败 ${failCount} 个`,
+      type: 'success',
+      duration: 3000
+    })
+
     await loadData()
   } catch (error) {
     batchLoading.value = false
@@ -594,10 +602,8 @@ const batchTestBookmarks = async () => {
       })
     }
   }
-
   batchLoading.value = false
   selectedBookmarks.value = []
-  isAllSelected.value = false
 
   ElMessage.success(`测试完成：成功 ${successCount} 个，失败 ${failCount} 个`)
   
@@ -668,7 +674,13 @@ const batchDeduplicateBookmarks = async () => {
     selectedBookmarks.value = []
     isAllSelected.value = false
 
-    ElMessage.success(`去重完成：删除了 ${deletedCount} 个重复网址`)
+    ElNotification({
+      title: '批量去重完成',
+      message: `成功删除 ${deletedCount} 个重复网址`,
+      type: 'success',
+      duration: 3000
+    })
+
     await loadData()
   } catch (error) {
     batchLoading.value = false
@@ -725,14 +737,15 @@ const deleteCategory = async (category) => {
       : `确定要删除分类"${category.name}"吗？该分类下的网址将自动迁移到"未分类"。`
     
     await ElMessageBox.confirm(message, '确认删除', {
-      type: 'warning'
+      type: 'warning',
+      confirmButtonText: '确定',
+      cancelButtonText: '取消'
     })
     await api.delete(`/categories/${category.id}`)
     ElMessage.success('删除成功')
     
     if (selectedBookmarks.value.length > 0) {
       selectedBookmarks.value = []
-      isAllSelected.value = false
       ElNotification({
         title: '提示',
         message: `分类"${category.name}"已删除，选中的网址已自动取消`,
