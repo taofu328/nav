@@ -9,10 +9,8 @@ import (
 )
 
 func GetBookmarks(c *gin.Context) {
-	userID := c.GetUint("user_id")
-
 	var bookmarks []models.Bookmark
-	if err := database.DB.Where("user_id = ?", userID).Order("sort_order ASC, created_at ASC").Find(&bookmarks).Error; err != nil {
+	if err := database.DB.Order("sort_order ASC, created_at ASC").Find(&bookmarks).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Failed to fetch bookmarks"})
 		return
 	}
@@ -23,22 +21,30 @@ func GetBookmarks(c *gin.Context) {
 type CreateBookmarkRequest struct {
 	Title       string `json:"title" binding:"required"`
 	URL         string `json:"url" binding:"required"`
-	CategoryID  uint   `json:"category_id" binding:"required"`
+	CategoryID  *uint  `json:"category_id"`
 	Description string `json:"description"`
 	Icon        string `json:"icon"`
 }
 
 func CreateBookmark(c *gin.Context) {
-	userID := c.GetUint("user_id")
-
 	var req CreateBookmarkRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
+	categoryID := req.CategoryID
+	if categoryID == nil {
+		var defaultCategory models.Category
+		if err := database.DB.Where("is_default = ?", true).First(&defaultCategory).Error; err != nil {
+			c.JSON(500, gin.H{"error": "Default category not found"})
+			return
+		}
+		categoryID = &defaultCategory.ID
+	}
+
 	var category models.Category
-	if err := database.DB.Where("id = ? AND user_id = ?", req.CategoryID, userID).First(&category).Error; err != nil {
+	if err := database.DB.First(&category, *categoryID).Error; err != nil {
 		c.JSON(400, gin.H{"error": "Category not found"})
 		return
 	}
@@ -52,8 +58,7 @@ func CreateBookmark(c *gin.Context) {
 	}
 
 	bookmark := models.Bookmark{
-		UserID:      userID,
-		CategoryID:  req.CategoryID,
+		CategoryID:  categoryID,
 		Title:       req.Title,
 		URL:         req.URL,
 		Description: req.Description,
@@ -71,11 +76,10 @@ func CreateBookmark(c *gin.Context) {
 }
 
 func UpdateBookmark(c *gin.Context) {
-	userID := c.GetUint("user_id")
 	id, _ := strconv.Atoi(c.Param("id"))
 
 	var bookmark models.Bookmark
-	if err := database.DB.Where("id = ? AND user_id = ?", id, userID).First(&bookmark).Error; err != nil {
+	if err := database.DB.First(&bookmark, id).Error; err != nil {
 		c.JSON(404, gin.H{"error": "Bookmark not found"})
 		return
 	}
@@ -87,16 +91,20 @@ func UpdateBookmark(c *gin.Context) {
 	}
 
 	var category models.Category
-	if err := database.DB.Where("id = ? AND user_id = ?", req.CategoryID, userID).First(&category).Error; err != nil {
-		c.JSON(400, gin.H{"error": "Category not found"})
-		return
+	if req.CategoryID != nil {
+		if err := database.DB.First(&category, *req.CategoryID).Error; err != nil {
+			c.JSON(400, gin.H{"error": "Category not found"})
+			return
+		}
 	}
 
 	bookmark.Title = req.Title
 	bookmark.URL = req.URL
-	bookmark.CategoryID = req.CategoryID
+	if req.CategoryID != nil {
+		bookmark.CategoryID = req.CategoryID
+	}
 	bookmark.Description = req.Description
-	
+
 	if req.Icon != "" {
 		bookmark.Icon = req.Icon
 	} else if bookmark.URL != req.URL {
@@ -115,11 +123,10 @@ func UpdateBookmark(c *gin.Context) {
 }
 
 func DeleteBookmark(c *gin.Context) {
-	userID := c.GetUint("user_id")
 	id, _ := strconv.Atoi(c.Param("id"))
 
 	var bookmark models.Bookmark
-	if err := database.DB.Where("id = ? AND user_id = ?", id, userID).First(&bookmark).Error; err != nil {
+	if err := database.DB.First(&bookmark, id).Error; err != nil {
 		c.JSON(404, gin.H{"error": "Bookmark not found"})
 		return
 	}
@@ -133,19 +140,18 @@ func DeleteBookmark(c *gin.Context) {
 }
 
 func IncrementVisit(c *gin.Context) {
-	userID := c.GetUint("user_id")
 	id, _ := strconv.Atoi(c.Param("id"))
 
 	var bookmark models.Bookmark
-	if err := database.DB.Where("id = ? AND user_id = ?", id, userID).First(&bookmark).Error; err != nil {
+	if err := database.DB.First(&bookmark, id).Error; err != nil {
 		c.JSON(404, gin.H{"error": "Bookmark not found"})
 		return
 	}
 
 	if err := database.DB.Model(&bookmark).UpdateColumn("visit_count", bookmark.VisitCount+1).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Failed to update visit count"})
+		c.JSON(500, gin.H{"error": "Failed to increment visit count"})
 		return
 	}
 
-	c.JSON(200, gin.H{"message": "Visit count updated"})
+	c.JSON(200, gin.H{"message": "Visit count incremented"})
 }

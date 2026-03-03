@@ -189,7 +189,12 @@ const handleSearch = () => {
 }
 
 const showAdminLogin = () => {
-  adminLoginVisible.value = true
+  const token = localStorage.getItem('admin_token')
+  if (token) {
+    router.push('/admin')
+  } else {
+    adminLoginVisible.value = true
+  }
 }
 
 const handleAdminLogin = async () => {

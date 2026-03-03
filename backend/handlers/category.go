@@ -9,10 +9,8 @@ import (
 )
 
 func GetCategories(c *gin.Context) {
-	userID := c.GetUint("user_id")
-
 	var categories []models.Category
-	if err := database.DB.Where("user_id = ?", userID).Order("sort_order ASC, created_at ASC").Find(&categories).Error; err != nil {
+	if err := database.DB.Order("is_default DESC, sort_order ASC, created_at ASC").Find(&categories).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Failed to fetch categories"})
 		return
 	}
@@ -27,8 +25,6 @@ type CreateCategoryRequest struct {
 }
 
 func CreateCategory(c *gin.Context) {
-	userID := c.GetUint("user_id")
-
 	var req CreateCategoryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
@@ -36,7 +32,6 @@ func CreateCategory(c *gin.Context) {
 	}
 
 	category := models.Category{
-		UserID:      userID,
 		Name:        req.Name,
 		Description: req.Description,
 		Icon:        req.Icon,
@@ -52,11 +47,10 @@ func CreateCategory(c *gin.Context) {
 }
 
 func UpdateCategory(c *gin.Context) {
-	userID := c.GetUint("user_id")
 	id, _ := strconv.Atoi(c.Param("id"))
 
 	var category models.Category
-	if err := database.DB.Where("id = ? AND user_id = ?", id, userID).First(&category).Error; err != nil {
+	if err := database.DB.First(&category, id).Error; err != nil {
 		c.JSON(404, gin.H{"error": "Category not found"})
 		return
 	}
@@ -80,29 +74,39 @@ func UpdateCategory(c *gin.Context) {
 }
 
 func DeleteCategory(c *gin.Context) {
-	userID := c.GetUint("user_id")
 	id, _ := strconv.Atoi(c.Param("id"))
 
 	var category models.Category
-	if err := database.DB.Where("id = ? AND user_id = ?", id, userID).First(&category).Error; err != nil {
+	if err := database.DB.First(&category, id).Error; err != nil {
 		c.JSON(404, gin.H{"error": "Category not found"})
+		return
+	}
+
+	if category.IsDefault {
+		c.JSON(400, gin.H{"error": "Cannot delete default category"})
+		return
+	}
+
+	var defaultCategory models.Category
+	if err := database.DB.Where("is_default = ?", true).First(&defaultCategory).Error; err != nil {
+		c.JSON(500, gin.H{"error": "Default category not found"})
 		return
 	}
 
 	tx := database.DB.Begin()
 	
+	if err := tx.Model(&models.Bookmark{}).Where("category_id = ?", id).Update("category_id", defaultCategory.ID).Error; err != nil {
+		tx.Rollback()
+		c.JSON(500, gin.H{"error": "Failed to migrate bookmarks"})
+		return
+	}
+
 	if err := tx.Delete(&category).Error; err != nil {
 		tx.Rollback()
 		c.JSON(500, gin.H{"error": "Failed to delete category"})
 		return
 	}
 
-	if err := tx.Where("category_id = ?", id).Delete(&models.Bookmark{}).Error; err != nil {
-		tx.Rollback()
-		c.JSON(500, gin.H{"error": "Failed to delete associated bookmarks"})
-		return
-	}
-
 	tx.Commit()
-	c.JSON(200, gin.H{"message": "Category deleted successfully"})
+	c.JSON(200, gin.H{"message": "Category deleted successfully", "migrated_to": defaultCategory.ID})
 }

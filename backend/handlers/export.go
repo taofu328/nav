@@ -56,7 +56,7 @@ func ImportData(c *gin.Context) {
 		}
 	}
 
-	categoryMap := make(map[uint]uint)
+	categoryMap := make(map[uint]*uint)
 	var importedCategories []models.Category
 	if err := tx.Where("user_id = ?", userID).Find(&importedCategories).Error; err != nil {
 		tx.Rollback()
@@ -66,15 +66,18 @@ func ImportData(c *gin.Context) {
 
 	for i, category := range importedCategories {
 		if i < len(data.Categories) {
-			categoryMap[data.Categories[i].ID] = category.ID
+			categoryID := category.ID
+			categoryMap[data.Categories[i].ID] = &categoryID
 		}
 	}
 
 	for _, bookmark := range data.Bookmarks {
 		bookmark.ID = 0
 		bookmark.UserID = userID
-		if newCategoryID, exists := categoryMap[bookmark.CategoryID]; exists {
-			bookmark.CategoryID = newCategoryID
+		if bookmark.CategoryID != nil {
+			if newCategoryID, exists := categoryMap[*bookmark.CategoryID]; exists {
+				bookmark.CategoryID = newCategoryID
+			}
 		}
 		if err := tx.Create(&bookmark).Error; err != nil {
 			tx.Rollback()

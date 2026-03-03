@@ -23,6 +23,7 @@ type Category struct {
 	Description string         `json:"description"`
 	Icon        string         `json:"icon"`
 	SortOrder   int            `json:"sort_order" gorm:"default:0"`
+	IsDefault   bool           `json:"is_default" gorm:"default:false"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
@@ -32,7 +33,7 @@ type Category struct {
 type Bookmark struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
 	UserID      uint           `json:"user_id" gorm:"not null;index"`
-	CategoryID  uint           `json:"category_id" gorm:"not null;index"`
+	CategoryID  *uint          `json:"category_id" gorm:"index"`
 	Title       string         `json:"title" gorm:"not null"`
 	URL         string         `json:"url" gorm:"not null"`
 	Description string         `json:"description"`

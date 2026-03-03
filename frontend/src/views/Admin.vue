@@ -39,20 +39,62 @@
         <el-tab-pane label="网址管理" name="bookmarks">
           <div class="bg-white rounded-lg shadow-sm p-6">
             <div class="flex justify-between items-center mb-6">
-              <el-input
-                v-model="searchKeyword"
-                placeholder="搜索网址..."
-                prefix-icon="Search"
-                clearable
-                class="w-64"
-              />
-              <el-button @click="showBookmarkDialog" type="primary">
-                <el-icon class="mr-1"><Plus /></el-icon>
-                添加网址
-              </el-button>
+              <div class="flex items-center space-x-4">
+                <el-select
+                  v-model="selectedCategory"
+                  placeholder="选择分类"
+                  clearable
+                  class="w-48"
+                  @change="handleCategoryChange"
+                  @clear="handleCategoryClear"
+                >
+                  <el-option label="全部" :value="null" />
+                  <el-option
+                    v-for="category in categories"
+                    :key="category.id"
+                    :label="category.name"
+                    :value="category.id"
+                  />
+                </el-select>
+                <el-input
+                  v-model="searchKeyword"
+                  placeholder="搜索网址..."
+                  prefix-icon="Search"
+                  clearable
+                  class="w-64"
+                />
+              </div>
+              <div class="flex items-center space-x-2">
+                <el-button @click="showBookmarkDialog" type="primary">
+                  <el-icon class="mr-1"><Plus /></el-icon>
+                  添加网址
+                </el-button>
+                <el-dropdown @command="handleBatchCommand" :disabled="selectedBookmarks.length === 0">
+                  <el-button type="primary">
+                    <el-icon class="mr-1"><Operation /></el-icon>
+                    批量操作
+                    <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-item command="batchDelete">
+                      <el-icon><Delete /></el-icon>
+                      批量删除
+                    </el-dropdown-item>
+                    <el-dropdown-item command="batchTest">
+                      <el-icon><Connection /></el-icon>
+                      批量测试
+                    </el-dropdown-item>
+                    <el-dropdown-item command="batchDeduplicate">
+                      <el-icon><DocumentCopy /></el-icon>
+                      批量去重
+                    </el-dropdown-item>
+                  </template>
+                </el-dropdown>
+              </div>
             </div>
 
-            <el-table :data="filteredBookmarks" stripe style="width: 100%">
+            <el-table :data="filteredBookmarks" stripe style="width: 100%" @selection-change="handleSelectionChange">
+              <el-table-column type="selection" width="55" />
               <el-table-column prop="title" label="标题" width="200" />
               <el-table-column prop="url" label="网址" min-width="250">
                 <template #default="{ row }">
@@ -89,7 +131,15 @@
             </div>
 
             <el-table :data="categories" stripe style="width: 100%">
-              <el-table-column prop="name" label="分类名称" width="200" />
+              <el-table-column prop="name" label="分类名称" width="200">
+                <template #default="{ row }">
+                  <span v-if="row.is_default" class="text-blue-600 font-semibold">
+                    <el-icon class="mr-1"><Star /></el-icon>
+                    {{ row.name }}
+                  </span>
+                  <span v-else>{{ row.name }}</span>
+                </template>
+              </el-table-column>
               <el-table-column prop="description" label="描述" min-width="250" />
               <el-table-column prop="sort_order" label="排序" width="100" align="center" />
               <el-table-column label="网址数量" width="120" align="center">
@@ -102,7 +152,12 @@
                   <el-button @click="editCategory(row)" type="primary" size="small">
                     编辑
                   </el-button>
-                  <el-button @click="deleteCategory(row)" type="danger" size="small">
+                  <el-button 
+                    @click="deleteCategory(row)" 
+                    type="danger" 
+                    size="small"
+                    :disabled="row.is_default"
+                  >
                     删除
                   </el-button>
                 </template>
@@ -203,8 +258,8 @@
         <el-form-item label="网址" prop="url">
           <el-input v-model="bookmarkForm.url" placeholder="https://example.com" />
         </el-form-item>
-        <el-form-item label="分类" prop="category_id">
-          <el-select v-model="bookmarkForm.category_id" placeholder="选择分类" class="w-full">
+        <el-form-item label="分类">
+          <el-select v-model="bookmarkForm.category_id" placeholder="选择分类（可选）" clearable class="w-full">
             <el-option
               v-for="category in categories"
               :key="category.id"
@@ -266,7 +321,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import api from '@/utils/api'
 
 const router = useRouter()
@@ -274,10 +329,17 @@ const router = useRouter()
 const activeTab = ref('bookmarks')
 const loading = ref(false)
 const saving = ref(false)
+const batchLoading = ref(false)
 const searchKeyword = ref('')
+const selectedCategory = ref(null)
 const categories = ref([])
 const bookmarks = ref([])
 const adminUser = ref(null)
+const selectedBookmarks = ref([])
+
+const currentPage = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
 
 const bookmarkDialogVisible = ref(false)
 const categoryDialogVisible = ref(false)
@@ -313,8 +375,7 @@ const bookmarkRules = {
   url: [
     { required: true, message: '请输入网址', trigger: 'blur' },
     { type: 'url', message: '请输入正确的网址格式', trigger: 'blur' }
-  ],
-  category_id: [{ required: true, message: '请选择分类', trigger: 'change' }]
+  ]
 }
 
 const categoryRules = {
@@ -322,16 +383,22 @@ const categoryRules = {
 }
 
 const filteredBookmarks = computed(() => {
-  if (!searchKeyword.value) {
-    return bookmarks.value
+  let result = bookmarks.value
+  
+  if (selectedCategory.value !== null && selectedCategory.value !== undefined) {
+    result = result.filter(bookmark => bookmark.category_id === selectedCategory.value)
   }
   
-  const keyword = searchKeyword.value.toLowerCase()
-  return bookmarks.value.filter(bookmark => 
-    bookmark.title.toLowerCase().includes(keyword) ||
-    bookmark.url.toLowerCase().includes(keyword) ||
-    (bookmark.description && bookmark.description.toLowerCase().includes(keyword))
-  )
+  if (searchKeyword.value) {
+    const keyword = searchKeyword.value.toLowerCase()
+    result = result.filter(bookmark => 
+      bookmark.title.toLowerCase().includes(keyword) ||
+      bookmark.url.toLowerCase().includes(keyword) ||
+      (bookmark.description && bookmark.description.toLowerCase().includes(keyword))
+    )
+  }
+  
+  return result
 })
 
 const getCategoryBookmarkCount = (categoryId) => {
@@ -371,6 +438,42 @@ const editCategory = (category) => {
     sort_order: category.sort_order
   })
   categoryDialogVisible.value = true
+}
+
+const handleCategoryChange = () => {
+  console.log('Category changed to:', selectedCategory.value)
+}
+
+const handleCategoryClear = () => {
+  console.log('Category cleared')
+}
+
+const handleSelectionChange = (selection) => {
+  selectedBookmarks.value = selection
+}
+
+const toggleSelectAll = () => {
+  if (selectedBookmarks.value.length > 0 && selectedBookmarks.value.length === filteredBookmarks.data.length) {
+    selectedBookmarks.value = []
+  } else {
+    selectedBookmarks.value = [...filteredBookmarks.data]
+  }
+}
+
+const handleBatchCommand = async (command) => {
+  if (command === 'batchDelete') {
+    await batchDeleteBookmarks()
+  } else if (command === 'batchTest') {
+    await batchTestBookmarks()
+  } else if (command === 'batchDeduplicate') {
+    await batchDeduplicateBookmarks()
+  }
+}
+
+const handlePageChange = (page) => {
+  currentPage.value = page
+  selectedBookmarks.value = []
+  isAllSelected.value = false
 }
 
 const saveBookmark = async () => {
@@ -414,6 +517,181 @@ const deleteBookmark = async (bookmark) => {
   }
 }
 
+const batchDeleteBookmarks = async () => {
+  if (selectedBookmarks.value.length === 0) {
+    ElMessage.warning('请先选择要删除的网址')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(`确定要删除选中的 ${selectedBookmarks.value.length} 个网址吗？`, '确认删除', {
+      type: 'warning'
+    })
+
+    batchLoading.value = true
+    let successCount = 0
+    let failCount = 0
+
+    for (const bookmark of selectedBookmarks.value) {
+      try {
+        await api.delete(`/bookmarks/${bookmark.id}`)
+        successCount++
+      } catch (error) {
+        failCount++
+        console.error('Failed to delete bookmark:', error)
+      }
+    }
+
+    batchLoading.value = false
+    selectedBookmarks.value = []
+    isAllSelected.value = false
+
+    ElMessage.success(`删除成功：${successCount} 个，失败：${failCount} 个`)
+    await loadData()
+  } catch (error) {
+    batchLoading.value = false
+    console.error('Batch delete failed:', error)
+  }
+}
+
+const batchTestBookmarks = async () => {
+  if (selectedBookmarks.value.length === 0) {
+    ElMessage.warning('请先选择要测试的网址')
+    return
+  }
+
+  batchLoading.value = true
+  let successCount = 0
+  let failCount = 0
+  const results = []
+
+  for (const bookmark of selectedBookmarks.value) {
+    try {
+      const response = await fetch(bookmark.url, {
+        method: 'HEAD',
+        mode: 'no-cors'
+      })
+      results.push({
+        id: bookmark.id,
+        title: bookmark.title,
+        url: bookmark.url,
+        status: response.ok ? 'success' : 'failed',
+        statusCode: response.status
+      })
+      if (response.ok) {
+        successCount++
+      } else {
+        failCount++
+      }
+    } catch (error) {
+      failCount++
+      results.push({
+        id: bookmark.id,
+        title: bookmark.title,
+        url: bookmark.url,
+        status: 'error',
+        error: error.message
+      })
+    }
+  }
+
+  batchLoading.value = false
+  selectedBookmarks.value = []
+  isAllSelected.value = false
+
+  ElMessage.success(`测试完成：成功 ${successCount} 个，失败 ${failCount} 个`)
+  
+  console.table(results)
+}
+
+const batchDeduplicateBookmarks = async () => {
+  if (selectedBookmarks.value.length === 0) {
+    ElMessage.warning('请先选择要去重的网址')
+    return
+  }
+
+  const urlMap = new Map()
+  const duplicates = []
+  const uniqueBookmarks = []
+  const toDelete = []
+
+  for (const bookmark of selectedBookmarks.value) {
+    const normalizedUrl = normalizeUrl(bookmark.url)
+    
+    if (urlMap.has(normalizedUrl)) {
+      const existing = urlMap.get(normalizedUrl)
+      if (existing.created_at < bookmark.created_at) {
+        toDelete.push(bookmark.id)
+      } else {
+        toDelete.push(existing.id)
+        urlMap.set(normalizedUrl, bookmark)
+        uniqueBookmarks.push(bookmark)
+      }
+    } else {
+      urlMap.set(normalizedUrl, bookmark)
+      uniqueBookmarks.push(bookmark)
+    }
+  }
+
+  if (toDelete.length === 0) {
+    ElMessage.info('没有发现重复网址')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(`发现 ${toDelete.length} 个重复网址，保留创建时间最早的记录，确定要去重吗？`, '确认去重', {
+      type: 'warning',
+      confirmButtonText: '确定',
+      cancelButtonText: '取消'
+    })
+
+    batchLoading.value = true
+    let deletedCount = 0
+    let processedCount = 0
+    const total = toDelete.length
+
+    for (const id of toDelete) {
+      try {
+        await api.delete(`/bookmarks/${id}`)
+        deletedCount++
+        processedCount++
+        
+        if (processedCount % 5 === 0) {
+          ElMessage.info(`正在处理 ${processedCount}/${total} 条数据...`)
+        }
+      } catch (error) {
+        console.error('Failed to delete duplicate:', error)
+      }
+    }
+
+    batchLoading.value = false
+    selectedBookmarks.value = []
+    isAllSelected.value = false
+
+    ElMessage.success(`去重完成：删除了 ${deletedCount} 个重复网址`)
+    await loadData()
+  } catch (error) {
+    batchLoading.value = false
+    console.error('Batch deduplicate failed:', error)
+  }
+}
+
+function normalizeUrl(url) {
+  try {
+    const urlObj = new URL(url)
+    let normalized = urlObj.protocol + '//' + urlObj.hostname + urlObj.pathname
+    const query = urlObj.search
+    if (query) {
+      const params = new URLSearchParams(query)
+      params.sort()
+      normalized += '?' + params.toString()
+    }
+    return normalized.toLowerCase()
+  } catch {
+    return url.toLowerCase()
+  }
+}
+
 const saveCategory = async () => {
   if (!categoryFormRef.value) return
   
@@ -442,11 +720,26 @@ const saveCategory = async () => {
 
 const deleteCategory = async (category) => {
   try {
-    await ElMessageBox.confirm(`确定要删除分类"${category.name}"吗？分类下的网址也会被删除。`, '确认删除', {
+    const message = category.is_default 
+      ? '默认分类"未分类"不能删除' 
+      : `确定要删除分类"${category.name}"吗？该分类下的网址将自动迁移到"未分类"。`
+    
+    await ElMessageBox.confirm(message, '确认删除', {
       type: 'warning'
     })
     await api.delete(`/categories/${category.id}`)
     ElMessage.success('删除成功')
+    
+    if (selectedBookmarks.value.length > 0) {
+      selectedBookmarks.value = []
+      isAllSelected.value = false
+      ElNotification({
+        title: '提示',
+        message: `分类"${category.name}"已删除，选中的网址已自动取消`,
+        type: 'info'
+      })
+    }
+    
     await loadData()
   } catch (error) {
     if (error !== 'cancel') {
@@ -542,8 +835,10 @@ const loadData = async () => {
       api.get('/categories'),
       api.get('/bookmarks')
     ])
-    categories.value = categoriesRes.data
-    bookmarks.value = bookmarksRes.data
+    categories.value = categoriesRes
+    bookmarks.value = bookmarksRes
+    total.value = bookmarksRes.length
+    currentPage.value = 1
   } catch (error) {
     console.error('Failed to load data:', error)
     ElMessage.error('加载数据失败')
@@ -569,6 +864,11 @@ onMounted(() => {
   if (!token) {
     router.push('/admin/login')
     return
+  }
+  
+  const userData = localStorage.getItem('admin_user')
+  if (userData) {
+    adminUser.value = JSON.parse(userData)
   }
   
   const settingsData = localStorage.getItem('site_settings')
