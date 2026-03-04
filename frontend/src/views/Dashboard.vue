@@ -20,63 +20,66 @@
     </header>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div class="flex flex-col lg:flex-row gap-6">
-        <aside class="lg:w-64 flex-shrink-0">
-          <div class="bg-white rounded-lg shadow p-4">
-            <div class="flex justify-between items-center mb-4">
-              <h2 class="text-lg font-semibold text-gray-800">分类</h2>
-              <el-button @click="showCategoryDialog = true" type="primary" size="small" circle>
-                <el-icon><Plus /></el-icon>
-              </el-button>
+      <div class="flex flex-col gap-6">
+        <div class="bg-white rounded-lg shadow p-4">
+          <div class="flex flex-wrap gap-2">
+            <div
+              @click="selectedCategory = null"
+              :class="[
+                'px-4 py-2 rounded-full cursor-pointer transition-all duration-300',
+                selectedCategory === null 
+                  ? 'bg-blue-600 text-white shadow-md transform scale-105' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-md'
+              ]"
+              class="category-tag"
+            >
+              <span class="text-sm font-medium">全部</span>
             </div>
-            <div class="space-y-2">
-              <div
-                v-for="category in categories"
-                :key="category.id"
-                @click="selectedCategory = category.id"
-                :class="[
-                  'flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors',
-                  selectedCategory === category.id ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-50'
-                ]"
-              >
-                <div class="flex items-center">
-                  <el-icon><Folder /></el-icon>
-                  <span class="ml-2">{{ category.name }}</span>
-                </div>
-                <el-dropdown @command="(cmd) => handleCategoryAction(cmd, category)">
-                  <el-icon class="cursor-pointer hover:text-blue-600">
-                    <MoreFilled />
-                  </el-icon>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                      <el-dropdown-item command="delete">删除</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
+            <div
+              v-for="category in categories"
+              :key="category.id"
+              @click="selectedCategory = category.id"
+              :class="[
+                'px-4 py-2 rounded-full cursor-pointer transition-all duration-300',
+                selectedCategory === category.id 
+                  ? 'bg-blue-600 text-white shadow-md transform scale-105' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-md'
+              ]"
+              class="category-tag"
+            >
+              <span class="text-sm font-medium">{{ category.name }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex flex-col lg:flex-row gap-6">
+          <aside class="lg:w-64 flex-shrink-0">
+            <div class="bg-white rounded-lg shadow p-4">
+              <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold text-gray-800">数据管理</h2>
+                <el-button @click="showCategoryDialog = true" type="primary" size="small" circle>
+                  <el-icon><Plus /></el-icon>
+                </el-button>
+              </div>
+              <div class="space-y-2">
+                <el-button @click="exportData" class="w-full mb-2" type="success">
+                  <el-icon class="mr-2"><Download /></el-icon>
+                  导出数据
+                </el-button>
+                <el-upload
+                  :auto-upload="false"
+                  :on-change="importData"
+                  :show-file-list="false"
+                  accept=".json"
+                >
+                  <el-button class="w-full" type="warning">
+                    <el-icon class="mr-2"><Upload /></el-icon>
+                    导入数据
+                  </el-button>
+                </el-upload>
               </div>
             </div>
-          </div>
-
-          <div class="bg-white rounded-lg shadow p-4 mt-4">
-            <h2 class="text-lg font-semibold text-gray-800 mb-4">数据管理</h2>
-            <el-button @click="exportData" class="w-full mb-2" type="success">
-              <el-icon class="mr-2"><Download /></el-icon>
-              导出数据
-            </el-button>
-            <el-upload
-              :auto-upload="false"
-              :on-change="importData"
-              :show-file-list="false"
-              accept=".json"
-            >
-              <el-button class="w-full" type="warning">
-                <el-icon class="mr-2"><Upload /></el-icon>
-                导入数据
-              </el-button>
-            </el-upload>
-          </div>
-        </aside>
+          </aside>
 
         <div class="flex-1">
           <div class="bg-white rounded-lg shadow p-6">
@@ -495,3 +498,19 @@ onMounted(() => {
   loadBookmarks()
 })
 </script>
+
+<style scoped>
+.category-tag {
+  transition: all 0.3s ease;
+  user-select: none;
+}
+
+.category-tag:hover {
+  transform: translateY(-2px);
+}
+
+.category-tag.active {
+  transform: scale(1.05);
+  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.1);
+}
+</style>

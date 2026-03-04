@@ -28,6 +28,37 @@
     </header>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div class="bg-white rounded-lg shadow p-4 mb-6">
+        <div class="flex flex-wrap gap-2">
+          <div
+            @click="selectedCategory = null"
+            :class="[
+              'px-4 py-2 rounded-full cursor-pointer transition-all duration-300',
+              selectedCategory === null 
+                ? 'bg-blue-600 text-white shadow-md transform scale-105' 
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-md'
+            ]"
+            class="category-tag"
+          >
+            <span class="text-sm font-medium">全部</span>
+          </div>
+          <div
+            v-for="category in categories"
+            :key="category.id"
+            @click="selectedCategory = category.id"
+            :class="[
+              'px-4 py-2 rounded-full cursor-pointer transition-all duration-300',
+              selectedCategory === category.id 
+                ? 'bg-blue-600 text-white shadow-md transform scale-105' 
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-md'
+            ]"
+            class="category-tag"
+          >
+            <span class="text-sm font-medium">{{ category.name }}</span>
+          </div>
+        </div>
+      </div>
+
       <div v-if="loading" class="text-center py-12">
         <el-icon class="is-loading" :size="40">
           <Loading />
@@ -69,6 +100,7 @@
                         :src="getIconUrl(bookmark)"
                         :alt="bookmark.title"
                         class="w-12 h-12 rounded object-cover flex-shrink-0"
+                        @error="handleIconError"
                       />
                       <div class="flex-1 min-w-0">
                         <h3 class="font-medium text-gray-800 group-hover:text-blue-600 truncate">
@@ -138,10 +170,19 @@ const router = useRouter()
 
 const loading = ref(false)
 const searchKeyword = ref('')
-const categories = ref([])
+const selectedCategory = ref(null)
+const allCategories = ref([])
 const bookmarks = ref([])
 const adminLoginVisible = ref(false)
 const loginLoading = ref(false)
+
+// 只显示有有效网址的分类
+const categories = computed(() => {
+  return allCategories.value.filter(category => {
+    const categoryBookmarks = bookmarks.value.filter(b => b.category_id === category.id)
+    return categoryBookmarks.length > 0
+  })
+})
 
 const loginForm = reactive({
   username: '',
@@ -156,19 +197,27 @@ const loginRules = {
 }
 
 const filteredCategories = computed(() => {
-  if (!searchKeyword.value) {
-    return categories.value
+  let result = categories.value
+  
+  // 按选中的分类过滤
+  if (selectedCategory.value) {
+    result = result.filter(category => category.id === selectedCategory.value)
   }
   
-  const keyword = searchKeyword.value.toLowerCase()
-  return categories.value.filter(category => {
-    const categoryBookmarks = getCategoryBookmarks(category.id)
-    return categoryBookmarks.some(bookmark => 
-      bookmark.title.toLowerCase().includes(keyword) ||
-      bookmark.url.toLowerCase().includes(keyword) ||
-      (bookmark.description && bookmark.description.toLowerCase().includes(keyword))
-    )
-  })
+  // 按搜索关键词过滤
+  if (searchKeyword.value) {
+    const keyword = searchKeyword.value.toLowerCase()
+    result = result.filter(category => {
+      const categoryBookmarks = getCategoryBookmarks(category.id)
+      return categoryBookmarks.some(bookmark => 
+        bookmark.title.toLowerCase().includes(keyword) ||
+        bookmark.url.toLowerCase().includes(keyword) ||
+        (bookmark.description && bookmark.description.toLowerCase().includes(keyword))
+      )
+    })
+  }
+  
+  return result
 })
 
 const getCategoryBookmarks = (categoryId) => {
@@ -183,6 +232,10 @@ const getIconUrl = (bookmark) => {
     return bookmark.icon
   }
   return '/api/icons/default.svg'
+}
+
+const handleIconError = (event) => {
+  event.target.src = '/api/icons/default.svg'
 }
 
 const handleSearch = () => {
@@ -246,7 +299,7 @@ const loadPublicData = async () => {
       fetch('/api/public/bookmarks')
     ])
     
-    categories.value = await categoriesRes.json()
+    allCategories.value = await categoriesRes.json()
     bookmarks.value = await bookmarksRes.json()
   } catch (error) {
     console.error('Failed to load data:', error)
@@ -260,3 +313,19 @@ onMounted(() => {
   loadPublicData()
 })
 </script>
+
+<style scoped>
+.category-tag {
+  transition: all 0.3s ease;
+  user-select: none;
+}
+
+.category-tag:hover {
+  transform: translateY(-2px);
+}
+
+.category-tag.active {
+  transform: scale(1.05);
+  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.1);
+}
+</style>

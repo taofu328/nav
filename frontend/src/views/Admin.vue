@@ -97,9 +97,19 @@
               </div>
             </div>
 
-            <el-table :data="filteredBookmarks" stripe style="width: 100%" @selection-change="handleSelectionChange">
+            <el-table :data="paginatedBookmarks" stripe style="width: 100%" @selection-change="handleSelectionChange">
               <el-table-column type="selection" width="55" />
               <el-table-column prop="title" label="标题" width="200" />
+              <el-table-column label="图标" width="80" align="center">
+                <template #default="{ row }">
+                  <img
+                    :src="getIconUrl(row)"
+                    :alt="row.title"
+                    class="w-8 h-8 rounded object-cover"
+                    @error="handleIconError"
+                  />
+                </template>
+              </el-table-column>
               <el-table-column prop="url" label="网址" min-width="250">
                 <template #default="{ row }">
                   <a :href="row.url" target="_blank" class="text-blue-600 hover:underline">
@@ -110,7 +120,7 @@
               <el-table-column prop="category.name" label="分类" width="120" />
               <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
               <el-table-column prop="visit_count" label="访问次数" width="100" align="center" />
-              <el-table-column label="操作" width="180" fixed="right">
+              <el-table-column label="操作" width="180">
                 <template #default="{ row }">
                   <el-button @click="editBookmark(row)" type="primary" size="small">
                     编辑
@@ -121,6 +131,33 @@
                 </template>
               </el-table-column>
             </el-table>
+
+            <div class="flex justify-between items-center mt-4">
+              <div class="text-sm text-gray-600">
+                共 {{ totalItems }} 条记录，第 {{ currentPage }} / {{ totalPages }} 页
+              </div>
+              <div class="flex items-center space-x-2">
+                <el-button
+                  @click="currentPage = currentPage > 1 ? currentPage - 1 : 1"
+                  :disabled="currentPage === 1"
+                  size="small"
+                >
+                  上一页
+                </el-button>
+                <el-button
+                  @click="currentPage = currentPage < totalPages ? currentPage + 1 : totalPages"
+                  :disabled="currentPage === totalPages"
+                  size="small"
+                >
+                  下一页
+                </el-button>
+                <el-select v-model="pageSize" size="small" @change="currentPage = 1">
+                  <el-option label="10条/页" value="10" />
+                  <el-option label="20条/页" value="20" />
+                  <el-option label="50条/页" value="50" />
+                </el-select>
+              </div>
+            </div>
           </div>
         </el-tab-pane>
 
@@ -470,6 +507,20 @@ const filteredBookmarks = computed(() => {
   }
   
   return result
+})
+
+const paginatedBookmarks = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return filteredBookmarks.value.slice(start, end)
+})
+
+const totalPages = computed(() => {
+  return Math.ceil(filteredBookmarks.value.length / pageSize.value)
+})
+
+const totalItems = computed(() => {
+  return filteredBookmarks.value.length
 })
 
 const getCategoryBookmarkCount = (categoryId) => {
@@ -1089,6 +1140,20 @@ const handleCommand = (command) => {
     adminUser.value = null
     router.push('/')
   }
+}
+
+const getIconUrl = (bookmark) => {
+  if (bookmark.icon && bookmark.icon.startsWith('/api/icons/')) {
+    return bookmark.icon
+  }
+  if (bookmark.icon) {
+    return bookmark.icon
+  }
+  return '/api/icons/default.svg'
+}
+
+const handleIconError = (event) => {
+  event.target.src = '/api/icons/default.svg'
 }
 
 onMounted(() => {
