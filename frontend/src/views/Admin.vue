@@ -88,6 +88,10 @@
                       <el-icon><DocumentCopy /></el-icon>
                       批量去重
                     </el-dropdown-item>
+                    <el-dropdown-item command="batchFetchIcons">
+                      <el-icon><Picture /></el-icon>
+                      批量获取图标
+                    </el-dropdown-item>
                   </template>
                 </el-dropdown>
               </div>
@@ -269,7 +273,29 @@
           </el-select>
         </el-form-item>
         <el-form-item label="图标">
-          <el-input v-model="bookmarkForm.icon" placeholder="图标URL（可选）" />
+          <div class="flex space-x-2">
+            <el-button @click="fetchIcon" type="primary" :loading="fetchingIcon">
+              <el-icon class="mr-1"><Connection /></el-icon>
+              重新获取
+            </el-button>
+            <el-upload
+              class="upload-demo"
+              :action="'/api/icons/upload'"
+              :headers="{ Authorization: `Bearer ${adminToken}` }"
+              :on-success="handleIconUpload"
+              :on-error="handleIconUploadError"
+              :show-file-list="false"
+              accept=".png,.jpg,.jpeg,.svg,.ico"
+            >
+              <el-button type="success">
+                <el-icon class="mr-1"><Upload /></el-icon>
+                上传图标
+              </el-button>
+            </el-upload>
+          </div>
+          <div v-if="bookmarkForm.icon" class="mt-2">
+            <el-image :src="bookmarkForm.icon" fit="cover" :preview-src-list="[bookmarkForm.icon]" style="width: 48px; height: 48px;" />
+          </div>
         </el-form-item>
         <el-form-item label="描述">
           <el-input
@@ -315,6 +341,44 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="batchFetchIconLoading" title="批量获取图标" width="600px" :close-on-click-modal="false" :close-on-press-escape="false">
+      <div class="batch-progress-container">
+        <div class="progress-info">
+          <el-progress :percentage="Math.round((batchFetchIconProgress / batchFetchIconTotal) * 100)" :status="batchFetchIconCancelled ? 'exception' : 'success'" />
+          <div class="progress-text">
+            <span class="current">{{ batchFetchIconProgress }} / {{ batchFetchIconTotal }}</span>
+            <span class="percentage">{{ Math.round((batchFetchIconProgress / batchFetchIconTotal) * 100) }}%</span>
+          </div>
+        </div>
+        
+        <div v-if="batchFetchIconResults.length > 0" class="results-list">
+          <div class="results-header">
+            <span>获取结果</span>
+            <el-button size="small" @click="batchFetchIconCancelled = true" :disabled="!batchFetchIconLoading">
+              取消操作
+            </el-button>
+          </div>
+          <div class="results-content">
+            <div
+              v-for="result in batchFetchIconResults"
+              :key="result.id"
+              class="result-item"
+              :class="{ success: result.status === 'success', failed: result.status === 'error' }"
+            >
+              <div class="result-title">{{ result.title }}</div>
+              <div class="result-url">{{ result.url }}</div>
+              <div class="result-status">
+                <el-icon v-if="result.status === 'success'" class="success-icon"><CircleCheck /></el-icon>
+                <el-icon v-else class="error-icon"><CircleClose /></el-icon>
+                <span :class="result.status">{{ result.status === 'success' ? '成功' : '失败' }}</span>
+              </div>
+              <div v-if="result.error" class="result-error">{{ result.error }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -330,12 +394,19 @@ const activeTab = ref('bookmarks')
 const loading = ref(false)
 const saving = ref(false)
 const batchLoading = ref(false)
+const fetchingIcon = ref(false)
+const batchFetchIconLoading = ref(false)
+const batchFetchIconProgress = ref(0)
+const batchFetchIconTotal = ref(0)
+const batchFetchIconResults = ref([])
+const batchFetchIconCancelled = ref(false)
 const searchKeyword = ref('')
 const selectedCategory = ref(null)
 const categories = ref([])
 const bookmarks = ref([])
 const adminUser = ref(null)
 const selectedBookmarks = ref([])
+const adminToken = ref('')
 
 const currentPage = ref(1)
 const pageSize = ref(20)
@@ -467,6 +538,8 @@ const handleBatchCommand = async (command) => {
     await batchTestBookmarks()
   } else if (command === 'batchDeduplicate') {
     await batchDeduplicateBookmarks()
+  } else if (command === 'batchFetchIcons') {
+    await batchFetchIcons()
   }
 }
 
@@ -688,6 +761,101 @@ const batchDeduplicateBookmarks = async () => {
   }
 }
 
+const batchFetchIcons = async () => {
+  if (selectedBookmarks.value.length === 0) {
+    ElMessage.warning('请先选择要获取图标的网址')
+    return
+  }
+
+  batchFetchIconLoading.value = true
+  batchFetchIconProgress.value = 0
+  batchFetchIconTotal.value = selectedBookmarks.value.length
+  batchFetchIconResults.value = []
+  batchFetchIconCancelled.value = false
+
+  // 创建一个固定长度的数组副本，避免循环过程中数组长度变化
+  const bookmarksToProcess = [...selectedBookmarks.value]
+  const total = bookmarksToProcess.length
+
+  let successCount = 0
+  let failCount = 0
+
+  for (let i = 0; i < total; i++) {
+    if (batchFetchIconCancelled.value) {
+      ElMessage.info('批量获取图标已取消')
+      break
+    }
+
+    const bookmark = bookmarksToProcess[i]
+    try {
+      const response = await api.get(`/icons?url=${encodeURIComponent(bookmark.url)}`)
+      if (response.icon) {
+        const oldIcon = bookmark.icon
+        
+        if (oldIcon && oldIcon !== response.icon) {
+          try {
+            await api.delete(`/icons?url=${encodeURIComponent(oldIcon)}`)
+          } catch (error) {
+            console.error('Failed to delete old icon:', error)
+          }
+        }
+        
+        await api.put(`/bookmarks/${bookmark.id}`, { 
+          title: bookmark.title,
+          url: bookmark.url,
+          category_id: bookmark.category_id,
+          description: bookmark.description,
+          sort_order: bookmark.sort_order,
+          icon: response.icon 
+        })
+        successCount++
+        batchFetchIconResults.value.push({
+          id: bookmark.id,
+          title: bookmark.title,
+          url: bookmark.url,
+          status: 'success'
+        })
+      } else {
+        failCount++
+        batchFetchIconResults.value.push({
+          id: bookmark.id,
+          title: bookmark.title,
+          url: bookmark.url,
+          status: 'failed',
+          error: 'Failed to fetch icon'
+        })
+      }
+    } catch (error) {
+      failCount++
+      batchFetchIconResults.value.push({
+        id: bookmark.id,
+        title: bookmark.title,
+        url: bookmark.url,
+        status: 'error',
+        error: error.message
+      })
+    }
+
+    batchFetchIconProgress.value = i + 1
+    
+    if ((i + 1) % 5 === 0) {
+      await new Promise(resolve => setTimeout(resolve, 1000))
+    }
+  }
+
+  batchFetchIconLoading.value = false
+  selectedBookmarks.value = []
+
+  ElNotification({
+    title: '批量获取图标完成',
+    message: `成功获取 ${successCount} 个图标，失败 ${failCount} 个`,
+    type: 'success',
+    duration: 3000
+  })
+
+  await loadData()
+}
+
 function normalizeUrl(url) {
   try {
     const urlObj = new URL(url)
@@ -841,6 +1009,57 @@ const resetCategoryForm = () => {
   categoryFormRef.value?.resetFields()
 }
 
+const fetchIcon = async () => {
+  if (!bookmarkForm.url) {
+    ElMessage.warning('请先输入网址')
+    return
+  }
+  
+  // 保存旧的图标路径
+  const oldIcon = bookmarkForm.icon
+  
+  fetchingIcon.value = true
+  try {
+    const response = await api.get(`/icons?url=${encodeURIComponent(bookmarkForm.url)}`)
+    if (response.icon) {
+      // 添加时间戳参数，避免浏览器缓存旧图标
+      bookmarkForm.icon = response.icon + '?t=' + Date.now()
+      ElMessage.success('图标获取成功')
+      
+      // 如果有旧图标且与新图标不同，删除旧图标
+      if (oldIcon && oldIcon !== response.icon) {
+        try {
+          await api.delete(`/icons?url=${encodeURIComponent(oldIcon)}`)
+        } catch (error) {
+          console.error('Failed to delete old icon:', error)
+        }
+      }
+    } else {
+      ElMessage.error('图标获取失败，请稍后重试')
+    }
+  } catch (error) {
+    console.error('Failed to fetch icon:', error)
+    ElMessage.error('图标获取失败，请稍后重试')
+  } finally {
+    fetchingIcon.value = false
+  }
+}
+
+const handleIconUpload = (response) => {
+  if (response.icon) {
+    // 添加时间戳参数，避免浏览器缓存旧图标
+    bookmarkForm.icon = response.icon + '?t=' + Date.now()
+    ElMessage.success('图标上传成功')
+  } else {
+    ElMessage.error('图标上传失败，请稍后重试')
+  }
+}
+
+const handleIconUploadError = (error) => {
+  console.error('Icon upload error:', error)
+  ElMessage.error('图标上传失败，请稍后重试')
+}
+
 const loadData = async () => {
   loading.value = true
   try {
@@ -878,6 +1097,7 @@ onMounted(() => {
     router.push('/admin/login')
     return
   }
+  adminToken.value = token
   
   const userData = localStorage.getItem('admin_user')
   if (userData) {
@@ -892,3 +1112,113 @@ onMounted(() => {
   loadData()
 })
 </script>
+
+<style scoped>
+.batch-progress-container {
+  padding: 20px;
+}
+
+.progress-info {
+  margin-bottom: 20px;
+}
+
+.progress-text {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.current {
+  color: #606266;
+}
+
+.percentage {
+  color: #409eff;
+  font-weight: bold;
+}
+
+.results-list {
+  margin-top: 20px;
+}
+
+.results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-weight: bold;
+}
+
+.results-content {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.result-item {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  border-left: 3px solid #dcdfe6;
+  background-color: #f5f7fa;
+}
+
+.result-item.success {
+  border-left-color: #67c23a;
+  background-color: #f0f9ff;
+}
+
+.result-item.failed {
+  border-left-color: #f56c6c;
+  background-color: #fef0f0;
+}
+
+.result-title {
+  font-weight: bold;
+  margin-bottom: 4px;
+  color: #303133;
+}
+
+.result-url {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+
+.result-status {
+  display: flex;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.success-icon {
+  color: #67c23a;
+  margin-right: 4px;
+}
+
+.error-icon {
+  color: #f56c6c;
+  margin-right: 4px;
+}
+
+.result-status span {
+  font-size: 12px;
+}
+
+.result-status .success {
+  color: #67c23a;
+}
+
+.result-status .failed {
+  color: #f56c6c;
+}
+
+.result-error {
+  font-size: 12px;
+  color: #f56c6c;
+  margin-top: 4px;
+}
+</style>

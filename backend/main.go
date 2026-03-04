@@ -43,11 +43,13 @@ func main() {
 		api.POST("/bookmarks/:id/visit", handlers.IncrementVisit)
 
 		api.GET("/export", handlers.ExportData)
-	api.POST("/import", handlers.ImportData)
+		api.POST("/import", handlers.ImportData)
 
-	api.DELETE("/admin/clear-all", handlers.ClearAllData)
+		api.DELETE("/admin/clear-all", handlers.ClearAllData)
 	api.POST("/admin/update-icons", handlers.UpdateAllIcons)
-}
+	api.POST("/icons/upload", handlers.UploadIcon)
+	api.DELETE("/icons", handlers.DeleteIcon)
+	}
 
 	port := utils.GetEnv("PORT", "8080")
 	log.Printf("Server starting on port %s...", port)
