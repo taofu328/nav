@@ -265,27 +265,90 @@
 
         <el-tab-pane label="系统设置" name="settings">
           <div class="bg-white rounded-lg shadow-sm p-6">
-            <el-form :model="settings" label-width="120px">
-              <el-form-item label="网站标题">
-                <el-input v-model="settings.siteTitle" placeholder="Van Nav" />
-              </el-form-item>
-              <el-form-item label="网站描述">
-                <el-input
-                  v-model="settings.siteDescription"
-                  type="textarea"
-                  :rows="3"
-                  placeholder="个人收藏网址导航"
-                />
-              </el-form-item>
-              <el-form-item label="每页显示">
-                <el-input-number v-model="settings.pageSize" :min="10" :max="100" />
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" @click="saveSettings">
-                  保存设置
-                </el-button>
-              </el-form-item>
-            </el-form>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div class="border border-gray-200 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                  <el-icon class="mr-2 text-blue-600"><User /></el-icon>
+                  修改用户信息
+                </h3>
+                <el-form :model="userForm" :rules="userRules" ref="userFormRef" label-width="100px">
+                  <el-form-item label="用户名" prop="username">
+                    <el-input v-model="userForm.username" placeholder="请输入用户名" />
+                  </el-form-item>
+                  <el-form-item label="新密码" prop="newPassword">
+                    <el-input
+                      v-model="userForm.newPassword"
+                      type="password"
+                      placeholder="留空则不修改密码"
+                      show-password
+                    />
+                  </el-form-item>
+                  <el-form-item label="确认密码" prop="confirmPassword">
+                    <el-input
+                      v-model="userForm.confirmPassword"
+                      type="password"
+                      placeholder="请再次输入新密码"
+                      show-password
+                    />
+                  </el-form-item>
+                  <el-form-item>
+                    <el-button type="primary" @click="updateUserInfo" :loading="updatingUser">
+                      保存修改
+                    </el-button>
+                    <el-button @click="resetUserForm">取消</el-button>
+                  </el-form-item>
+                </el-form>
+              </div>
+
+              <div class="border border-gray-200 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                  <el-icon class="mr-2 text-blue-600"><Setting /></el-icon>
+                  修改网站信息
+                </h3>
+                <el-form :model="siteSettings" :rules="siteRules" ref="siteFormRef" label-width="100px">
+                  <el-form-item label="网站标题" prop="siteTitle">
+                    <el-input v-model="siteSettings.siteTitle" placeholder="请输入网站标题" />
+                  </el-form-item>
+
+                  <el-form-item label="网站Logo">
+                    <div class="flex space-x-2 items-center">
+                      <el-upload
+                        class="upload-demo"
+                        :action="'/api/icons/upload'"
+                        :headers="{ Authorization: `Bearer ${adminToken}` }"
+                        :on-success="handleLogoUpload"
+                        :on-error="handleLogoUploadError"
+                        :show-file-list="false"
+                        accept=".png,.jpg,.jpeg,.svg,.ico"
+                        name="icon"
+                      >
+                        <el-button type="primary">
+                          <el-icon class="mr-1"><Upload /></el-icon>
+                          上传Logo
+                        </el-button>
+                      </el-upload>
+                      <el-button @click="removeLogo" v-if="siteSettings.siteLogo" type="danger">
+                        <el-icon class="mr-1"><Delete /></el-icon>
+                        删除Logo
+                      </el-button>
+                      <div v-if="siteSettings.siteLogo" class="flex-shrink-0">
+                        <el-image 
+                          :src="siteSettings.siteLogo" 
+                          fit="cover" 
+                          :preview-src-list="[siteSettings.siteLogo]" 
+                          style="height: 32px; width: auto; max-width: 100px; border-radius: 4px;" 
+                        />
+                      </div>
+                    </div>
+                  </el-form-item>
+                  <el-form-item>
+                    <el-button type="primary" @click="updateSiteSettings" :loading="updatingSettings">
+                      保存设置
+                    </el-button>
+                  </el-form-item>
+                </el-form>
+              </div>
+            </div>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -475,8 +538,25 @@ const categoryForm = reactive({
 const settings = reactive({
   siteTitle: 'Van Nav',
   siteDescription: '个人收藏网址导航',
+  siteLogo: '',
   pageSize: 20
 })
+
+const userForm = reactive({
+  username: '',
+  newPassword: '',
+  confirmPassword: ''
+})
+
+const siteSettings = reactive({
+  siteTitle: 'Van Nav',
+  siteLogo: ''
+})
+
+const userFormRef = ref(null)
+const siteFormRef = ref(null)
+const updatingUser = ref(false)
+const updatingSettings = ref(false)
 
 const bookmarkRules = {
   title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
@@ -488,6 +568,35 @@ const bookmarkRules = {
 
 const categoryRules = {
   name: [{ required: true, message: '请输入分类名称', trigger: 'blur' }]
+}
+
+const userRules = {
+  username: [
+    { required: true, message: '请输入用户名', trigger: 'blur' },
+    { min: 3, max: 20, message: '用户名长度在 3 到 20 个字符', trigger: 'blur' },
+    { pattern: /^[a-zA-Z0-9_]+$/, message: '用户名只能包含字母、数字和下划线', trigger: 'blur' }
+  ],
+  newPassword: [
+    { min: 6, message: '密码长度至少为 6 个字符', trigger: 'blur' }
+  ],
+  confirmPassword: [
+    { 
+      validator: (rule, value, callback) => {
+        if (userForm.newPassword && value !== userForm.newPassword) {
+          callback(new Error('两次输入的密码不一致'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
+  ]
+}
+
+const siteRules = {
+  siteTitle: [
+    { required: true, message: '请输入网站标题', trigger: 'blur' }
+  ]
 }
 
 const filteredBookmarks = computed(() => {
@@ -982,9 +1091,48 @@ const deleteCategory = async (category) => {
 
 const exportData = async () => {
   try {
-    const response = await api.get('/export')
-    const data = JSON.stringify(response.data, null, 2)
-    const blob = new Blob([data], { type: 'application/json' })
+    console.log('开始导出数据...')
+    const data = await api.get('/export')
+    console.log('API响应数据:', data)
+    console.log('响应类型:', typeof data)
+    
+    if (!data || typeof data !== 'object') {
+      console.error('响应数据无效:', data)
+      ElMessage.error('导出失败：服务器返回的数据格式不正确')
+      return
+    }
+    
+    // 检查响应数据结构
+    console.log('响应数据结构:', Object.keys(data))
+    console.log('Categories字段:', data.Categories)
+    console.log('Bookmarks字段:', data.Bookmarks)
+    console.log('categories字段:', data.categories)
+    console.log('bookmarks字段:', data.bookmarks)
+    
+    // 兼容大小写字段名
+    const categories = data.Categories || data.categories || []
+    const bookmarks = data.Bookmarks || data.bookmarks || []
+    
+    if (categories.length === 0 && bookmarks.length === 0) {
+      console.error('响应数据为空:', data)
+      ElMessage.error('导出失败：服务器返回的数据为空')
+      return
+    }
+    
+    console.log('分类数量:', categories.length)
+    console.log('网址数量:', bookmarks.length)
+    
+    // 转换为正确的字段名
+    const exportData = {
+      Categories: categories,
+      Bookmarks: bookmarks
+    }
+    
+    const jsonData = JSON.stringify(exportData, null, 2)
+    console.log('JSON数据:', jsonData)
+    console.log('JSON数据长度:', jsonData.length)
+    
+    const blob = new Blob([jsonData], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -993,8 +1141,8 @@ const exportData = async () => {
     URL.revokeObjectURL(url)
     ElMessage.success('导出成功')
   } catch (error) {
-    console.error('Failed to export data:', error)
-    ElMessage.error('导出失败')
+    console.error('导出数据异常:', error)
+    ElMessage.error('导出失败：' + (error.message || '未知错误'))
   }
 }
 
@@ -1034,9 +1182,124 @@ const clearAllData = async () => {
   }
 }
 
-const saveSettings = () => {
-  localStorage.setItem('site_settings', JSON.stringify(settings))
-  ElMessage.success('设置已保存')
+const updateUserInfo = async () => {
+  if (!userFormRef.value) return
+  
+  await userFormRef.value.validate(async (valid) => {
+    if (valid) {
+      updatingUser.value = true
+      try {
+        const response = await api.put('/admin/user', {
+          username: userForm.username,
+          new_password: userForm.newPassword
+        })
+        
+        if (response.user) {
+          localStorage.setItem('admin_user', JSON.stringify(response.user))
+          adminUser.value = response.user
+        }
+        
+        ElMessage.success('用户信息更新成功')
+        resetUserForm()
+      } catch (error) {
+        console.error('Failed to update user info:', error)
+        ElMessage.error('更新失败：' + (error.message || '未知错误'))
+      } finally {
+        updatingUser.value = false
+      }
+    }
+  })
+}
+
+const updateSiteSettings = async () => {
+  if (!siteFormRef.value) return
+  
+  await siteFormRef.value.validate(async (valid) => {
+    if (valid) {
+      updatingSettings.value = true
+      try {
+        const response = await api.put('/admin/settings', {
+          site_title: siteSettings.siteTitle,
+          site_logo: siteSettings.siteLogo
+        })
+        
+        localStorage.setItem('site_settings', JSON.stringify({
+          siteTitle: siteSettings.siteTitle,
+          siteLogo: siteSettings.siteLogo
+        }))
+        
+        // 更新页面标题
+        if (siteSettings.siteTitle) {
+          document.title = siteSettings.siteTitle
+        }
+        
+        ElMessage.success('网站设置更新成功')
+      } catch (error) {
+        console.error('Failed to update site settings:', error)
+        ElMessage.error('更新失败：' + (error.message || '未知错误'))
+      } finally {
+        updatingSettings.value = false
+      }
+    }
+  })
+}
+
+const resetUserForm = () => {
+  if (adminUser.value) {
+    userForm.username = adminUser.value.username
+  }
+  userForm.newPassword = ''
+  userForm.confirmPassword = ''
+  userFormRef.value?.resetFields()
+}
+
+const handleLogoUpload = (response) => {
+  if (response.icon) {
+    siteSettings.siteLogo = response.icon + '?t=' + Date.now()
+    // 更新favicon
+    const favicon = document.getElementById('favicon')
+    if (favicon) {
+      favicon.href = siteSettings.siteLogo
+    }
+    ElMessage.success('Logo上传成功')
+  } else {
+    ElMessage.error('Logo上传失败，请稍后重试')
+  }
+}
+
+const handleLogoUploadError = (error) => {
+  console.error('Logo upload error:', error)
+  ElMessage.error('Logo上传失败，请稍后重试')
+}
+
+const removeLogo = async () => {
+  try {
+    await ElMessageBox.confirm('确定要删除网站Logo吗？', '确认删除', {
+      type: 'warning',
+      confirmButtonText: '确定',
+      cancelButtonText: '取消'
+    })
+    
+    if (siteSettings.siteLogo) {
+      try {
+        await api.delete(`/icons?url=${encodeURIComponent(siteSettings.siteLogo)}`)
+      } catch (error) {
+        console.error('Failed to delete logo:', error)
+      }
+    }
+    
+    siteSettings.siteLogo = ''
+    // 恢复默认favicon
+    const favicon = document.getElementById('favicon')
+    if (favicon) {
+      favicon.href = '/api/icons/default.svg'
+    }
+    ElMessage.success('Logo删除成功')
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('Failed to remove logo:', error)
+    }
+  }
 }
 
 const resetBookmarkForm = () => {
@@ -1111,25 +1374,6 @@ const handleIconUploadError = (error) => {
   ElMessage.error('图标上传失败，请稍后重试')
 }
 
-const loadData = async () => {
-  loading.value = true
-  try {
-    const [categoriesRes, bookmarksRes] = await Promise.all([
-      api.get('/categories'),
-      api.get('/bookmarks')
-    ])
-    categories.value = categoriesRes
-    bookmarks.value = bookmarksRes
-    total.value = bookmarksRes.length
-    currentPage.value = 1
-  } catch (error) {
-    console.error('Failed to load data:', error)
-    ElMessage.error('加载数据失败')
-  } finally {
-    loading.value = false
-  }
-}
-
 const goHome = () => {
   router.push('/')
 }
@@ -1156,7 +1400,26 @@ const handleIconError = (event) => {
   event.target.src = '/api/icons/default.svg'
 }
 
-onMounted(() => {
+const loadData = async () => {
+  loading.value = true
+  try {
+    const [categoriesRes, bookmarksRes] = await Promise.all([
+      api.get('/categories'),
+      api.get('/bookmarks')
+    ])
+    categories.value = categoriesRes
+    bookmarks.value = bookmarksRes
+    total.value = bookmarksRes.length
+    currentPage.value = 1
+  } catch (error) {
+    console.error('Failed to load data:', error)
+    ElMessage.error('加载数据失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(async () => {
   const token = localStorage.getItem('admin_token')
   if (!token) {
     router.push('/admin/login')
@@ -1167,11 +1430,41 @@ onMounted(() => {
   const userData = localStorage.getItem('admin_user')
   if (userData) {
     adminUser.value = JSON.parse(userData)
+    userForm.username = adminUser.value.username
   }
   
-  const settingsData = localStorage.getItem('site_settings')
-  if (settingsData) {
-    Object.assign(settings, JSON.parse(settingsData))
+  // 从后端 API 获取网站设置
+  try {
+    const response = await api.get('/admin/settings')
+    if (response.data.settings) {
+      const savedSettings = response.data.settings
+      Object.assign(settings, {
+        siteTitle: savedSettings.site_title || 'Van Nav',
+        siteLogo: savedSettings.site_logo || ''
+      })
+      Object.assign(siteSettings, {
+        siteTitle: savedSettings.site_title || 'Van Nav',
+        siteLogo: savedSettings.site_logo || ''
+      })
+      
+      // 将设置保存到 localStorage 以便快速加载
+      localStorage.setItem('site_settings', JSON.stringify({
+        siteTitle: savedSettings.site_title || 'Van Nav',
+        siteLogo: savedSettings.site_logo || ''
+      }))
+    }
+  } catch (error) {
+    console.error('Failed to load site settings:', error)
+    // 如果 API 请求失败，尝试从 localStorage 加载
+    const settingsData = localStorage.getItem('site_settings')
+    if (settingsData) {
+      const savedSettings = JSON.parse(settingsData)
+      Object.assign(settings, savedSettings)
+      Object.assign(siteSettings, {
+        siteTitle: savedSettings.siteTitle || 'Van Nav',
+        siteLogo: savedSettings.siteLogo || ''
+      })
+    }
   }
   
   loadData()

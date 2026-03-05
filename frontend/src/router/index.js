@@ -10,7 +10,7 @@ const routes = [
   {
     path: '/admin/login',
     name: 'AdminLogin',
-    component: () => import('@/views/AdminLogin.vue'),
+    component: () => import('@/views/Login.vue'),
     meta: { requiresAuth: false, isPublic: true }
   },
   {
@@ -31,12 +31,7 @@ const routes = [
     component: () => import('@/views/Register.vue'),
     meta: { requiresAuth: false }
   },
-  {
-    path: '/dashboard',
-    name: 'Dashboard',
-    component: () => import('@/views/Dashboard.vue'),
-    meta: { requiresAuth: true }
-  }
+
 ]
 
 const router = createRouter({
@@ -63,7 +58,7 @@ router.beforeEach((to, from, next) => {
   } else if (to.path === '/admin/login' && adminToken) {
     next('/admin')
   } else if ((to.path === '/login' || to.path === '/register') && userToken) {
-    next('/dashboard')
+    next('/admin')
   } else {
     next()
   }

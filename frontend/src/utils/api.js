@@ -7,7 +7,12 @@ const api = axios.create({
 
 api.interceptors.request.use(
   config => {
-    const token = localStorage.getItem('admin_token')
+    // 首先尝试获取admin_token
+    let token = localStorage.getItem('admin_token')
+    // 如果没有admin_token，尝试获取普通用户token
+    if (!token) {
+      token = localStorage.getItem('token')
+    }
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -22,8 +27,11 @@ api.interceptors.response.use(
   response => response.data,
   error => {
     if (error.response?.status === 401) {
+      // 移除所有token
       localStorage.removeItem('admin_token')
-      window.location.href = '/admin/login'
+      localStorage.removeItem('token')
+      // 跳转到普通登录页面
+      window.location.href = '/login'
     }
     return Promise.reject(error)
   }

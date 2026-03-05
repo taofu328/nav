@@ -3,17 +3,17 @@
     <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
       <div class="text-center mb-8">
         <el-icon :size="48" class="text-blue-600">
-          <Link />
+          <Lock />
         </el-icon>
-        <h1 class="text-2xl font-bold text-gray-800 mt-4">网址导航</h1>
-        <p class="text-gray-500 mt-2">登录您的账户</p>
+        <h1 class="text-2xl font-bold text-gray-800 mt-4">后台管理登录</h1>
+        <p class="text-gray-500 mt-2">请输入管理员密码以访问后台管理系统</p>
       </div>
 
       <el-form :model="loginForm" :rules="rules" ref="formRef" @submit.prevent="handleLogin">
         <el-form-item prop="username">
           <el-input
             v-model="loginForm.username"
-            placeholder="用户名"
+            placeholder="管理员用户名"
             size="large"
             prefix-icon="User"
           />
@@ -23,10 +23,11 @@
           <el-input
             v-model="loginForm.password"
             type="password"
-            placeholder="密码"
+            placeholder="管理员密码"
             size="large"
             prefix-icon="Lock"
             show-password
+            @keyup.enter="handleLogin"
           />
         </el-form-item>
 
@@ -38,16 +39,16 @@
             class="w-full"
             native-type="submit"
           >
-            登录
+            登录后台
           </el-button>
         </el-form-item>
       </el-form>
 
       <div class="text-center mt-6">
-        <span class="text-gray-500">还没有账户？</span>
-        <router-link to="/register" class="text-blue-600 hover:text-blue-700 font-medium">
-          立即注册
-        </router-link>
+        <el-button @click="goHome" link class="text-gray-500">
+          <el-icon class="mr-1"><House /></el-icon>
+          返回前台
+        </el-button>
       </div>
     </div>
   </div>
@@ -57,10 +58,8 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
-const authStore = useAuthStore()
 const formRef = ref(null)
 const loading = ref(false)
 
@@ -81,15 +80,35 @@ const handleLogin = async () => {
     if (valid) {
       loading.value = true
       try {
-        await authStore.login(loginForm)
-        ElMessage.success('登录成功')
-        router.push('/')
+        const response = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(loginForm)
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          localStorage.setItem('admin_token', data.token)
+          localStorage.setItem('admin_user', JSON.stringify(data.user))
+          // 移除登录成功的提示，避免与Admin.vue中的提示重复
+          // ElMessage.success('登录成功')
+          router.push('/admin')
+        } else {
+          ElMessage.error('登录失败，请检查用户名和密码')
+        }
       } catch (error) {
         console.error('Login failed:', error)
+        ElMessage.error('登录失败')
       } finally {
         loading.value = false
       }
     }
   })
+}
+
+const goHome = () => {
+  router.push('/')
 }
 </script>

@@ -46,3 +46,10 @@ type Bookmark struct {
 	User        User           `json:"-" gorm:"foreignKey:UserID"`
 	Category    Category       `json:"category" gorm:"foreignKey:CategoryID"`
 }
+
+type SiteSetting struct {
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	Title     string    `json:"title" gorm:"not null"`
+	LogoURL   string    `json:"logo_url"`
+	UpdatedAt time.Time `json:"updated_at"`
+}

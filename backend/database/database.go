@@ -30,6 +30,7 @@ func InitDB() {
 		&models.User{},
 		&models.Category{},
 		&models.Bookmark{},
+		&models.SiteSetting{},
 	)
 	if err != nil {
 		log.Fatal("Failed to migrate database:", err)

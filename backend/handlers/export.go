@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"nav-backend/database"
 	"nav-backend/models"
 
@@ -14,18 +15,21 @@ type ExportDataStruct struct {
 
 func ExportData(c *gin.Context) {
 	userID := c.GetUint("user_id")
+	log.Printf("ExportData: user_id = %d", userID)
 
 	var categories []models.Category
 	if err := database.DB.Where("user_id = ?", userID).Find(&categories).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Failed to export categories"})
 		return
 	}
+	log.Printf("ExportData: categories count = %d", len(categories))
 
 	var bookmarks []models.Bookmark
-	if err := database.DB.Where("user_id = ?", userID).Find(&bookmarks).Error; err != nil {
+	if err := database.DB.Where("user_id = ?", userID).Preload("Category").Find(&bookmarks).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Failed to export bookmarks"})
 		return
 	}
+	log.Printf("ExportData: bookmarks count = %d", len(bookmarks))
 
 	data := ExportDataStruct{
 		Categories: categories,

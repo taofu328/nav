@@ -7,7 +7,7 @@
             <el-icon :size="32" class="text-blue-600">
               <Link />
             </el-icon>
-            <h1 class="text-xl font-bold text-gray-800">Van Nav</h1>
+            <h1 class="text-xl font-bold text-gray-800">{{ siteSettings.siteTitle }}</h1>
           </div>
           <div class="flex items-center space-x-4">
             <el-input
@@ -123,41 +123,19 @@
     <footer class="bg-white border-t border-gray-200 mt-12">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div class="flex justify-between items-center">
-          <p class="text-gray-500 text-sm">
-            © 2024 Van Nav. All rights reserved.
-          </p>
-          <div class="flex items-center space-x-4">
-            <el-button @click="showAdminLogin" type="primary" size="small" plain>
-              <el-icon class="mr-1"><Setting /></el-icon>
-              后台管理
-            </el-button>
-          </div>
+          <div class="flex items-center space-x-3">
+              <img v-if="siteSettings.siteLogo" :src="siteSettings.siteLogo" alt="Logo" class="h-8 w-auto" />
+              <div class="flex flex-col">
+                <p class="text-gray-500 text-sm">
+                  © 2024 {{ siteSettings.siteTitle }}. All rights reserved.
+                </p>
+              </div>
+            </div>
         </div>
       </div>
     </footer>
 
-    <el-dialog v-model="adminLoginVisible" title="管理员登录" width="400px">
-      <el-form :model="loginForm" :rules="loginRules" ref="loginFormRef" label-width="80px">
-        <el-form-item label="用户名" prop="username">
-          <el-input v-model="loginForm.username" placeholder="请输入管理员用户名" />
-        </el-form-item>
-        <el-form-item label="密码" prop="password">
-          <el-input
-            v-model="loginForm.password"
-            type="password"
-            placeholder="请输入管理员密码"
-            show-password
-            @keyup.enter="handleAdminLogin"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="adminLoginVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleAdminLogin" :loading="loginLoading">
-          登录
-        </el-button>
-      </template>
-    </el-dialog>
+
   </div>
 </template>
 
@@ -173,8 +151,10 @@ const searchKeyword = ref('')
 const selectedCategory = ref(null)
 const allCategories = ref([])
 const bookmarks = ref([])
-const adminLoginVisible = ref(false)
-const loginLoading = ref(false)
+const siteSettings = reactive({
+  siteTitle: 'Van Nav',
+  siteLogo: ''
+})
 
 // 只显示有有效网址的分类
 const categories = computed(() => {
@@ -184,17 +164,7 @@ const categories = computed(() => {
   })
 })
 
-const loginForm = reactive({
-  username: '',
-  password: ''
-})
 
-const loginFormRef = ref(null)
-
-const loginRules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
-}
 
 const filteredCategories = computed(() => {
   let result = categories.value
@@ -246,42 +216,11 @@ const showAdminLogin = () => {
   if (token) {
     router.push('/admin')
   } else {
-    adminLoginVisible.value = true
+    router.push('/login')
   }
 }
 
-const handleAdminLogin = async () => {
-  if (!loginFormRef.value) return
-  
-  await loginFormRef.value.validate(async (valid) => {
-    if (valid) {
-      loginLoading.value = true
-      try {
-        const response = await fetch('/api/admin/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(loginForm)
-        })
-        
-        if (response.ok) {
-          const data = await response.json()
-          localStorage.setItem('admin_token', data.token)
-          ElMessage.success('登录成功')
-          adminLoginVisible.value = false
-          router.push('/admin')
-        } else {
-          ElMessage.error('登录失败，请检查用户名和密码')
-        }
-      } catch (error) {
-        ElMessage.error('登录失败')
-      } finally {
-        loginLoading.value = false
-      }
-    }
-  })
-}
+
 
 const incrementVisit = async (bookmark) => {
   try {
@@ -294,16 +233,55 @@ const incrementVisit = async (bookmark) => {
 const loadPublicData = async () => {
   loading.value = true
   try {
-    const [categoriesRes, bookmarksRes] = await Promise.all([
+    const [categoriesRes, bookmarksRes, settingsRes] = await Promise.all([
       fetch('/api/public/categories'),
-      fetch('/api/public/bookmarks')
+      fetch('/api/public/bookmarks'),
+      fetch('/api/admin/settings')
     ])
     
     allCategories.value = await categoriesRes.json()
     bookmarks.value = await bookmarksRes.json()
+    
+    // 从后端 API 获取网站设置
+    if (settingsRes.ok) {
+      const settingsData = await settingsRes.json()
+      if (settingsData.settings) {
+        const savedSettings = settingsData.settings
+        Object.assign(siteSettings, {
+          siteTitle: savedSettings.site_title || 'Van Nav',
+          siteLogo: savedSettings.site_logo || ''
+        })
+        
+        // 将设置保存到 localStorage 以便快速加载
+        localStorage.setItem('site_settings', JSON.stringify({
+          siteTitle: savedSettings.site_title || 'Van Nav',
+          siteLogo: savedSettings.site_logo || ''
+        }))
+      }
+    } else {
+      // 如果 API 请求失败，尝试从 localStorage 加载
+      const settingsData = localStorage.getItem('site_settings')
+      if (settingsData) {
+        const savedSettings = JSON.parse(settingsData)
+        Object.assign(siteSettings, {
+          siteTitle: savedSettings.siteTitle || 'Van Nav',
+          siteLogo: savedSettings.siteLogo || ''
+        })
+      }
+    }
   } catch (error) {
     console.error('Failed to load data:', error)
     ElMessage.error('加载数据失败')
+    
+    // 如果 API 请求失败，尝试从 localStorage 加载
+    const settingsData = localStorage.getItem('site_settings')
+    if (settingsData) {
+      const savedSettings = JSON.parse(settingsData)
+      Object.assign(siteSettings, {
+        siteTitle: savedSettings.siteTitle || 'Van Nav',
+        siteLogo: savedSettings.siteLogo || ''
+      })
+    }
   } finally {
     loading.value = false
   }

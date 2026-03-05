@@ -46,12 +46,15 @@ func main() {
 		api.POST("/import", handlers.ImportData)
 
 		api.DELETE("/admin/clear-all", handlers.ClearAllData)
-	api.POST("/admin/update-icons", handlers.UpdateAllIcons)
-	api.POST("/icons/upload", handlers.UploadIcon)
-	api.DELETE("/icons", handlers.DeleteIcon)
+		api.POST("/admin/update-icons", handlers.UpdateAllIcons)
+		api.POST("/icons/upload", handlers.UploadIcon)
+		api.DELETE("/icons", handlers.DeleteIcon)
+		api.PUT("/admin/user", handlers.UpdateUserInfo)
+		api.GET("/admin/settings", handlers.GetSiteSettings)
+		api.PUT("/admin/settings", handlers.UpdateSiteSettings)
 	}
 
-	port := utils.GetEnv("PORT", "8080")
+	port := utils.GetEnv("PORT", "8081")
 	log.Printf("Server starting on port %s...", port)
 	r.Run(":" + port)
 }
