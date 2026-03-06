@@ -483,7 +483,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import api from '@/utils/api'
@@ -673,11 +673,20 @@ const editCategory = (category) => {
 
 const handleCategoryChange = () => {
   console.log('Category changed to:', selectedCategory.value)
+  // 筛选时重置到第一页
+  currentPage.value = 1
 }
 
 const handleCategoryClear = () => {
   console.log('Category cleared')
+  // 清除筛选时重置到第一页
+  currentPage.value = 1
 }
+
+// 监听搜索关键词变化，重置到第一页
+watch(searchKeyword, () => {
+  currentPage.value = 1
+})
 
 const handleSelectionChange = (selection) => {
   selectedBookmarks.value = selection

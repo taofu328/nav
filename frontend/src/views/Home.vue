@@ -127,7 +127,7 @@
               <img v-if="siteSettings.siteLogo" :src="siteSettings.siteLogo" alt="Logo" class="h-8 w-auto" />
               <div class="flex flex-col">
                 <p class="text-gray-500 text-sm">
-                  © 2024 {{ siteSettings.siteTitle }}. All rights reserved.
+                  © {{ new Date().getFullYear() }} {{ siteSettings.siteTitle }}. All rights reserved.
                 </p>
               </div>
             </div>
