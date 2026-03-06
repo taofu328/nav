@@ -65,18 +65,15 @@ func CreateBookmark(c *gin.Context) {
 		SortOrder:   0,
 		VisitCount:  0,
 	}
-
 	if err := database.DB.Create(&bookmark).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Failed to create bookmark"})
 		return
 	}
-
 	c.JSON(201, bookmark)
 }
 
 func UpdateBookmark(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-
 	var bookmark models.Bookmark
 	if err := database.DB.First(&bookmark, id).Error; err != nil {
 		c.JSON(404, gin.H{"error": "Bookmark not found"})
@@ -103,7 +100,6 @@ func UpdateBookmark(c *gin.Context) {
 		bookmark.CategoryID = req.CategoryID
 	}
 	bookmark.Description = req.Description
-
 	if req.Icon != "" {
 		bookmark.Icon = req.Icon
 	} else if bookmark.URL != req.URL {
@@ -117,13 +113,11 @@ func UpdateBookmark(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "Failed to update bookmark"})
 		return
 	}
-
 	c.JSON(200, bookmark)
 }
 
 func DeleteBookmark(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-
 	var bookmark models.Bookmark
 	if err := database.DB.First(&bookmark, id).Error; err != nil {
 		c.JSON(404, gin.H{"error": "Bookmark not found"})
@@ -134,13 +128,11 @@ func DeleteBookmark(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "Failed to delete bookmark"})
 		return
 	}
-
 	c.JSON(200, gin.H{"message": "Bookmark deleted successfully"})
 }
 
 func IncrementVisit(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-
 	var bookmark models.Bookmark
 	if err := database.DB.First(&bookmark, id).Error; err != nil {
 		c.JSON(404, gin.H{"error": "Bookmark not found"})
@@ -151,6 +143,5 @@ func IncrementVisit(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "Failed to increment visit count"})
 		return
 	}
-
 	c.JSON(200, gin.H{"message": "Visit count incremented"})
 }

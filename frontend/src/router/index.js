@@ -24,14 +24,7 @@ const routes = [
     name: 'Login',
     component: () => import('@/views/Login.vue'),
     meta: { requiresAuth: false }
-  },
-  {
-    path: '/register',
-    name: 'Register',
-    component: () => import('@/views/Register.vue'),
-    meta: { requiresAuth: false }
-  },
-
+  }
 ]
 
 const router = createRouter({
@@ -57,7 +50,7 @@ router.beforeEach((to, from, next) => {
     }
   } else if (to.path === '/admin/login' && adminToken) {
     next('/admin')
-  } else if ((to.path === '/login' || to.path === '/register') && userToken) {
+  } else if (to.path === '/login' && userToken) {
     next('/admin')
   } else {
     next()

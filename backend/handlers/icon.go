@@ -16,13 +16,13 @@ import (
 	"strings"
 	"time"
 
+	"nav-backend/config"
+
 	"github.com/gin-gonic/gin"
 )
 
-const iconsDir = "icons"
-
 func init() {
-	if err := os.MkdirAll(iconsDir, 0755); err != nil {
+	if err := os.MkdirAll(config.IconsDir, 0755); err != nil {
 		panic(err)
 	}
 }
@@ -60,7 +60,7 @@ func GetFavicon(c *gin.Context) {
 	// 使用域名和尺寸信息生成文件名，确保不同尺寸的图标可以共存
 	hash := md5.Sum([]byte(domain + "_large"))
 	filename := hex.EncodeToString(hash[:]) + ".png"
-	filePath := filepath.Join(iconsDir, filename)
+	filePath := filepath.Join(config.IconsDir, filename)
 	
 	log.Printf("[Icon Fetch] Icon info - Domain: %s, Type: PNG, Size: Large, Filename: %s", domain, filename)
 
@@ -180,7 +180,7 @@ func FetchFavicon(websiteURL string) (string, error) {
 	// 使用域名和尺寸信息生成文件名，确保不同尺寸的图标可以共存
 	hash := md5.Sum([]byte(domain + "_large"))
 	filename := hex.EncodeToString(hash[:]) + ".png"
-	filePath := filepath.Join(iconsDir, filename)
+	filePath := filepath.Join(config.IconsDir, filename)
 
 	if _, err := os.Stat(filePath); err == nil {
 		return "/api/icons/" + filename, nil
@@ -224,7 +224,7 @@ func ServeIcon(c *gin.Context) {
 	}
 
 	if filename == "default.png" {
-		svgPath := filepath.Join(iconsDir, "default.svg")
+		svgPath := filepath.Join(config.IconsDir, "default.svg")
 		if _, err := os.Stat(svgPath); err == nil {
 			c.Header("Content-Type", "image/svg+xml")
 			c.File(svgPath)
@@ -232,9 +232,9 @@ func ServeIcon(c *gin.Context) {
 		}
 	}
 
-	filePath := filepath.Join(iconsDir, filename)
+	filePath := filepath.Join(config.IconsDir, filename)
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		svgPath := filepath.Join(iconsDir, "default.svg")
+		svgPath := filepath.Join(config.IconsDir, "default.svg")
 		if _, err := os.Stat(svgPath); err == nil {
 			c.Header("Content-Type", "image/svg+xml")
 			c.File(svgPath)
@@ -248,7 +248,7 @@ func ServeIcon(c *gin.Context) {
 }
 
 func CleanInvalidIcons(c *gin.Context) {
-	entries, err := os.ReadDir(iconsDir)
+	entries, err := os.ReadDir(config.IconsDir)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to read icons directory"})
 		return
@@ -264,7 +264,7 @@ func CleanInvalidIcons(c *gin.Context) {
 			continue
 		}
 
-		filepath := filepath.Join(iconsDir, entry.Name())
+		filepath := filepath.Join(config.IconsDir, entry.Name())
 		info, err := entry.Info()
 		if err != nil {
 			continue
@@ -293,7 +293,7 @@ func DeleteIcon(c *gin.Context) {
 	// 从图标路径中提取文件名
 	if strings.HasPrefix(iconURL, "/api/icons/") {
 		filename := strings.TrimPrefix(iconURL, "/api/icons/")
-		filePath := filepath.Join(iconsDir, filename)
+		filePath := filepath.Join(config.IconsDir, filename)
 		
 		// 不允许删除默认图标
 		if filename == "default.svg" || filename == "default.png" {
@@ -345,7 +345,7 @@ func UploadIcon(c *gin.Context) {
 	// 生成唯一文件名
 	hash := md5.Sum([]byte(file.Filename + time.Now().String()))
 	filename := hex.EncodeToString(hash[:]) + ext
-	filePath := filepath.Join(iconsDir, filename)
+	filePath := filepath.Join(config.IconsDir, filename)
 
 	// 保存文件
 	if err := c.SaveUploadedFile(file, filePath); err != nil {
@@ -379,7 +379,7 @@ func GetIconFromURL(iconURL string) string {
 
 	hash := md5.Sum([]byte(parsedURL.Host))
 	filename := hex.EncodeToString(hash[:]) + ".png"
-	filepath := filepath.Join(iconsDir, filename)
+	filepath := filepath.Join(config.IconsDir, filename)
 
 	if _, err := os.Stat(filepath); err == nil {
 		return "/api/icons/" + filename

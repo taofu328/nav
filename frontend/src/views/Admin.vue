@@ -1091,23 +1091,16 @@ const deleteCategory = async (category) => {
 
 const exportData = async () => {
   try {
-    console.log('开始导出数据...')
+
     const data = await api.get('/export')
-    console.log('API响应数据:', data)
-    console.log('响应类型:', typeof data)
-    
+
+
     if (!data || typeof data !== 'object') {
       console.error('响应数据无效:', data)
       ElMessage.error('导出失败：服务器返回的数据格式不正确')
       return
     }
-    
-    // 检查响应数据结构
-    console.log('响应数据结构:', Object.keys(data))
-    console.log('Categories字段:', data.Categories)
-    console.log('Bookmarks字段:', data.Bookmarks)
-    console.log('categories字段:', data.categories)
-    console.log('bookmarks字段:', data.bookmarks)
+
     
     // 兼容大小写字段名
     const categories = data.Categories || data.categories || []
@@ -1119,8 +1112,7 @@ const exportData = async () => {
       return
     }
     
-    console.log('分类数量:', categories.length)
-    console.log('网址数量:', bookmarks.length)
+
     
     // 转换为正确的字段名
     const exportData = {
@@ -1129,9 +1121,7 @@ const exportData = async () => {
     }
     
     const jsonData = JSON.stringify(exportData, null, 2)
-    console.log('JSON数据:', jsonData)
-    console.log('JSON数据长度:', jsonData.length)
-    
+
     const blob = new Blob([jsonData], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -1152,11 +1142,19 @@ const importData = async (file) => {
     reader.onload = async (e) => {
       try {
         const data = JSON.parse(e.target.result)
-        await api.post('/import', data)
-        ElMessage.success('导入成功')
+        
+        // 构建导入请求，默认使用覆盖策略
+        const importRequest = {
+          data: data,
+          conflict: 'overwrite'
+        }
+        
+        const response = await api.post('/import', importRequest)
+        ElMessage.success(`导入成功！导入了 ${response.categories} 个分类和 ${response.bookmarks} 个书签`)
         await loadData()
       } catch (error) {
-        ElMessage.error('导入失败：文件格式错误')
+        console.error('导入失败:', error)
+        ElMessage.error('导入失败：' + (error.message || '文件格式错误'))
       }
     }
     reader.readAsText(file.raw)
@@ -1436,8 +1434,8 @@ onMounted(async () => {
   // 从后端 API 获取网站设置
   try {
     const response = await api.get('/admin/settings')
-    if (response.data.settings) {
-      const savedSettings = response.data.settings
+    if (response.settings) {
+      const savedSettings = response.settings
       Object.assign(settings, {
         siteTitle: savedSettings.site_title || 'Van Nav',
         siteLogo: savedSettings.site_logo || ''

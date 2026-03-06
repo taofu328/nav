@@ -2,8 +2,9 @@ package database
 
 import (
 	"log"
+	"nav-backend/config"
 	"nav-backend/models"
-	"os"
+	"nav-backend/utils"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -13,9 +14,9 @@ import (
 var DB *gorm.DB
 
 func InitDB() {
-	dbPath := os.Getenv("DB_PATH")
+	dbPath := config.DBPath
 	if dbPath == "" {
-		dbPath = "./nav.db"
+		dbPath = config.DBPath
 	}
 
 	var err error
@@ -36,5 +37,41 @@ func InitDB() {
 		log.Fatal("Failed to migrate database:", err)
 	}
 
+	// 检查是否需要创建默认管理员账户
+	createDefaultAdminIfNeeded()
+
 	log.Println("Database initialized successfully")
+}
+
+func createDefaultAdminIfNeeded() {
+	// 检查 users 表是否为空
+	var userCount int64
+	if err := DB.Model(&models.User{}).Count(&userCount).Error; err != nil {
+		log.Println("Failed to check user count:", err)
+		return
+	}
+
+	// 只有当没有用户时才创建默认管理员账户
+	if userCount == 0 {
+		log.Println("Creating default admin account...")
+		
+		// 创建默认管理员账户
+		hashedPassword, err := utils.HashPassword("admin")
+		if err != nil {
+			log.Println("Failed to hash admin password:", err)
+			return
+		}
+
+		admin := models.User{
+			Username: "admin",
+			Email:    "admin@nav.local",
+			Password: hashedPassword,
+		}
+
+		if err := DB.Create(&admin).Error; err != nil {
+			log.Println("Failed to create admin account:", err)
+		} else {
+			log.Println("Default admin account created successfully")
+		}
+	}
 }

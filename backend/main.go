@@ -17,7 +17,6 @@ func main() {
 
 	r.Use(middleware.CORS())
 
-	r.POST("/api/auth/register", handlers.Register)
 	r.POST("/api/auth/login", handlers.Login)
 
 	r.GET("/api/public/categories", handlers.GetPublicCategories)
@@ -27,6 +26,8 @@ func main() {
 	r.GET("/api/icons/:filename", handlers.ServeIcon)
 
 	r.POST("/api/admin/login", handlers.AdminLogin)
+	// 读取网站设置不需要身份验证
+	r.GET("/api/admin/settings", handlers.GetSiteSettings)
 
 	api := r.Group("/api")
 	api.Use(middleware.AuthMiddleware())
@@ -42,15 +43,15 @@ func main() {
 		api.DELETE("/bookmarks/:id", handlers.DeleteBookmark)
 		api.POST("/bookmarks/:id/visit", handlers.IncrementVisit)
 
-		api.GET("/export", handlers.ExportData)
-		api.POST("/import", handlers.ImportData)
+		api.GET("/export", handlers.ExportDataHandler)
+		api.POST("/import", handlers.ImportDataHandler)
 
 		api.DELETE("/admin/clear-all", handlers.ClearAllData)
 		api.POST("/admin/update-icons", handlers.UpdateAllIcons)
 		api.POST("/icons/upload", handlers.UploadIcon)
 		api.DELETE("/icons", handlers.DeleteIcon)
 		api.PUT("/admin/user", handlers.UpdateUserInfo)
-		api.GET("/admin/settings", handlers.GetSiteSettings)
+		// 修改网站设置需要身份验证
 		api.PUT("/admin/settings", handlers.UpdateSiteSettings)
 	}
 
