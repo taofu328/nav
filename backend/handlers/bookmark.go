@@ -23,6 +23,7 @@ type CreateBookmarkRequest struct {
 	CategoryID  *uint  `json:"category_id"`
 	Description string `json:"description"`
 	Icon        string `json:"icon"`
+	SortOrder   int    `json:"sort_order"`
 }
 
 func CreateBookmark(c *gin.Context) {
@@ -62,7 +63,7 @@ func CreateBookmark(c *gin.Context) {
 		URL:         req.URL,
 		Description: req.Description,
 		Icon:        icon,
-		SortOrder:   0,
+		SortOrder:   req.SortOrder,
 		VisitCount:  0,
 	}
 	if err := database.DB.Create(&bookmark).Error; err != nil {
@@ -100,6 +101,7 @@ func UpdateBookmark(c *gin.Context) {
 		bookmark.CategoryID = req.CategoryID
 	}
 	bookmark.Description = req.Description
+	bookmark.SortOrder = req.SortOrder
 	if req.Icon != "" {
 		bookmark.Icon = req.Icon
 	} else if bookmark.URL != req.URL {

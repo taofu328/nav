@@ -223,6 +223,10 @@ func ServeIcon(c *gin.Context) {
 		return
 	}
 
+	// 添加缓存头，避免浏览器不断请求图标
+	c.Header("Cache-Control", "public, max-age=86400") // 缓存1天
+	c.Header("Expires", time.Now().Add(24*time.Hour).Format(time.RFC1123))
+
 	if filename == "default.png" {
 		svgPath := filepath.Join(config.IconsDir, "default.svg")
 		if _, err := os.Stat(svgPath); err == nil {

@@ -8,6 +8,7 @@ require (
 	golang.org/x/crypto v0.13.0
 	gorm.io/driver/sqlite v1.5.4
 	gorm.io/gorm v1.25.5
+	modernc.org/sqlite v1.24.0
 )
 
 require (

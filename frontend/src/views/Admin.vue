@@ -118,6 +118,7 @@
                 </template>
               </el-table-column>
               <el-table-column prop="category.name" label="分类" width="120" />
+              <el-table-column prop="sort_order" label="排序" width="80" align="center" />
               <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
               <el-table-column prop="visit_count" label="访问次数" width="100" align="center" />
               <el-table-column label="操作" width="180">
@@ -526,13 +527,13 @@ const bookmarkForm = reactive({
   category_id: null,
   icon: '',
   description: '',
-  sort_order: 0
+  sort_order: 99
 })
 
 const categoryForm = reactive({
   name: '',
   description: '',
-  sort_order: 0
+  sort_order: 99
 })
 
 const settings = reactive({
@@ -1316,7 +1317,7 @@ const resetBookmarkForm = () => {
     category_id: null,
     icon: '',
     description: '',
-    sort_order: 0
+    sort_order: 99
   })
   bookmarkFormRef.value?.resetFields()
 }
@@ -1325,7 +1326,7 @@ const resetCategoryForm = () => {
   Object.assign(categoryForm, {
     name: '',
     description: '',
-    sort_order: 0
+    sort_order: 99
   })
   categoryFormRef.value?.resetFields()
 }

@@ -1,16 +1,22 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"nav-backend/database"
 	"nav-backend/handlers"
 	"nav-backend/middleware"
 	"nav-backend/utils"
+	"os"
 
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
+	// 解析命令行参数
+	port := flag.String("port", "8081", "Port for web access")
+	flag.Parse()
+
 	database.InitDB()
 
 	r := gin.Default()
@@ -55,7 +61,21 @@ func main() {
 		api.PUT("/admin/settings", handlers.UpdateSiteSettings)
 	}
 
-	port := utils.GetEnv("PORT", "8081")
-	log.Printf("Server starting on port %s...", port)
-	r.Run(":" + port)
+	// 提供静态文件服务，处理所有未匹配的路由
+	r.NoRoute(func(c *gin.Context) {
+		// 尝试提供静态文件
+		filePath := "./dist" + c.Request.URL.Path
+		if _, err := os.Stat(filePath); err == nil {
+			// 文件存在，直接提供
+			c.File(filePath)
+		} else {
+			// 文件不存在，提供index.html，用于前端路由
+			c.File("./dist/index.html")
+		}
+	})
+
+	// 使用命令行参数或环境变量指定的端口
+	portValue := utils.GetEnv("PORT", *port)
+	log.Printf("Server starting on port %s...", portValue)
+	r.Run(":" + portValue)
 }

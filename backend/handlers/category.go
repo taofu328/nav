@@ -21,6 +21,7 @@ type CreateCategoryRequest struct {
 	Name        string `json:"name" binding:"required"`
 	Description string `json:"description"`
 	Icon        string `json:"icon"`
+	SortOrder   int    `json:"sort_order"`
 }
 
 func CreateCategory(c *gin.Context) {
@@ -34,7 +35,7 @@ func CreateCategory(c *gin.Context) {
 		Name:        req.Name,
 		Description: req.Description,
 		Icon:        req.Icon,
-		SortOrder:   0,
+		SortOrder:   req.SortOrder,
 	}
 	if err := database.DB.Create(&category).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Failed to create category"})
@@ -60,6 +61,7 @@ func UpdateCategory(c *gin.Context) {
 	category.Name = req.Name
 	category.Description = req.Description
 	category.Icon = req.Icon
+	category.SortOrder = req.SortOrder
 
 	if err := database.DB.Save(&category).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Failed to update category"})
