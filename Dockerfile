@@ -29,8 +29,11 @@ RUN go mod download
 # 复制后端源代码
 COPY backend/ .
 
-# 构建后端
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o nav-backend .
+# 构建后端（使用纯Go的SQLite驱动，不需要CGO）
+RUN CGO_ENABLED=0 \
+    GOOS=linux \
+    GOARCH=arm64 \
+    go build -o nav-backend .
 
 # 第三阶段：最终镜像
 FROM --platform=linux/arm64 alpine:latest
@@ -42,6 +45,7 @@ RUN apk add --no-cache nginx supervisor
 
 # 复制后端构建产物
 COPY --from=backend-builder /app/backend/nav-backend .
+
 # 复制前端构建产物
 COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
 
@@ -52,7 +56,7 @@ COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 RUN mkdir -p /app/data/icons
 
 # 创建 supervisor 配置
-RUN echo '[supervisord]\nnodaemon=true\n\n[program:backend]\ncommand=/app/nav-backend\nautostart=true\nautorestart=true\nstdout_logfile=/dev/stdout\nstderr_logfile=/dev/stderr\n\n[program:nginx]\ncommand=nginx -g "daemon off;"\nautostart=true\nautorestart=true\nstdout_logfile=/dev/stdout\nstderr_logfile=/dev/stderr' > /etc/supervisord.conf
+RUN printf '[supervisord]\nnodaemon=true\n\n[program:backend]\ncommand=/app/nav-backend -port ${PORT}\nautostart=true\nautorestart=true\nstdout_logfile=/dev/stdout\nstderr_logfile=/dev/stderr\n\n[program:nginx]\ncommand=nginx -g "daemon off;"\nautostart=true\nautorestart=true\nstdout_logfile=/dev/stdout\nstderr_logfile=/dev/stderr\n' > /etc/supervisord.conf
 
 # 暴露端口
 EXPOSE 80

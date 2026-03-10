@@ -1,16 +1,21 @@
 package main
 
 import (
+	"embed"
 	"flag"
+	"io/fs"
 	"log"
 	"nav-backend/database"
 	"nav-backend/handlers"
 	"nav-backend/middleware"
 	"nav-backend/utils"
-	"os"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
+
+//go:embed dist/*
+var distFS embed.FS
 
 func main() {
 	// 解析命令行参数
@@ -61,17 +66,46 @@ func main() {
 		api.PUT("/admin/settings", handlers.UpdateSiteSettings)
 	}
 
-	// 提供静态文件服务，处理所有未匹配的路由
-	r.NoRoute(func(c *gin.Context) {
-		// 尝试提供静态文件
-		filePath := "./dist" + c.Request.URL.Path
-		if _, err := os.Stat(filePath); err == nil {
-			// 文件存在，直接提供
-			c.File(filePath)
-		} else {
-			// 文件不存在，提供index.html，用于前端路由
-			c.File("./dist/index.html")
+	// 获取嵌入的dist文件系统
+	embeddedFS, err := fs.Sub(distFS, "dist")
+	if err != nil {
+		log.Fatal("Failed to create sub filesystem:", err)
+	}
+
+	// 提供静态文件服务
+	r.GET("/assets/*filepath", func(c *gin.Context) {
+		c.FileFromFS(c.Request.URL.Path, http.FS(embeddedFS))
+	})
+
+	// 提供index.html
+	r.GET("/", func(c *gin.Context) {
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		data, err := fs.ReadFile(embeddedFS, "index.html")
+		if err != nil {
+			c.String(404, "Not found")
+			return
 		}
+		c.Data(200, "text/html; charset=utf-8", data)
+	})
+
+	// 处理所有未匹配的路由，用于前端路由
+	r.NoRoute(func(c *gin.Context) {
+		path := c.Request.URL.Path
+		
+		// 跳过API路由
+		if len(path) >= 4 && path[:4] == "/api" {
+			c.JSON(404, gin.H{"error": "Not found"})
+			return
+		}
+		
+		// 对于其他路径，提供index.html用于前端路由
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		data, err := fs.ReadFile(embeddedFS, "index.html")
+		if err != nil {
+			c.String(404, "Not found")
+			return
+		}
+		c.Data(200, "text/html; charset=utf-8", data)
 	})
 
 	// 使用命令行参数或环境变量指定的端口

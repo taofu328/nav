@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"net/http"
 	"nav-backend/utils"
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -32,14 +32,14 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		_, err := utils.ParseToken(tokenString)
+		claims, err := utils.ParseToken(tokenString)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			c.Abort()
 			return
 		}
 
-		// 不再设置 user_id，因为系统现在是单用户模式
+		c.Set("user_id", claims.UserID)
 		c.Next()
 	}
 }

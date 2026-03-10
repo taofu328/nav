@@ -1,6 +1,7 @@
 package database
 
 import (
+	"database/sql"
 	"log"
 	"nav-backend/config"
 	"nav-backend/models"
@@ -9,6 +10,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	_ "modernc.org/sqlite"
 )
 
 var DB *gorm.DB
@@ -20,7 +22,14 @@ func InitDB() {
 	}
 
 	var err error
-	DB, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+	sqlDB, err := sql.Open("sqlite", dbPath+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)")
+	if err != nil {
+		log.Fatal("Failed to open database:", err)
+	}
+
+	DB, err = gorm.Open(sqlite.Dialector{
+		Conn: sqlDB,
+	}, &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
 	})
 	if err != nil {
@@ -54,7 +63,7 @@ func createDefaultAdminIfNeeded() {
 	// 只有当没有用户时才创建默认管理员账户
 	if userCount == 0 {
 		log.Println("Creating default admin account...")
-		
+
 		// 创建默认管理员账户
 		hashedPassword, err := utils.HashPassword("admin")
 		if err != nil {
