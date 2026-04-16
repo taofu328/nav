@@ -24,6 +24,13 @@ type CreateCategoryRequest struct {
 	SortOrder   int    `json:"sort_order"`
 }
 
+type UpdateCategoryRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Icon        string `json:"icon"`
+	SortOrder   int    `json:"sort_order"`
+}
+
 func CreateCategory(c *gin.Context) {
 	var req CreateCategoryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -52,19 +59,27 @@ func UpdateCategory(c *gin.Context) {
 		return
 	}
 
-	var req CreateCategoryRequest
+	var req UpdateCategoryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
-	category.Name = req.Name
-	category.Description = req.Description
-	category.Icon = req.Icon
+	// 只更新提供的字段
+	if req.Name != "" {
+		category.Name = req.Name
+	}
+	if req.Description != "" {
+		category.Description = req.Description
+	}
+	if req.Icon != "" {
+		category.Icon = req.Icon
+	}
+	// 总是更新排序值，因为它可能是0
 	category.SortOrder = req.SortOrder
 
 	if err := database.DB.Save(&category).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Failed to update category"})
+		c.JSON(500, gin.H{"error": "Failed to update category", "details": err.Error()})
 		return
 	}
 	c.JSON(200, category)

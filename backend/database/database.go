@@ -53,24 +53,40 @@ func InitDB() {
 }
 
 func createDefaultAdminIfNeeded() {
-	// 检查 users 表是否为空
-	var userCount int64
-	if err := DB.Model(&models.User{}).Count(&userCount).Error; err != nil {
-		log.Println("Failed to check user count:", err)
+	// 检查是否已经存在admin用户
+	var adminUser models.User
+	result := DB.Where("username = ?", "admin").First(&adminUser)
+
+	// 打印查询结果
+	if result.Error == nil {
+		log.Println("Admin user already exists:", adminUser.Username)
 		return
 	}
 
-	// 只有当没有用户时才创建默认管理员账户
-	if userCount == 0 {
-		log.Println("Creating default admin account...")
+	// 尝试通过邮箱查找用户
+	result = DB.Where("email = ?", "admin@nav.local").First(&adminUser)
 
-		// 创建默认管理员账户
-		hashedPassword, err := utils.HashPassword("admin")
-		if err != nil {
-			log.Println("Failed to hash admin password:", err)
-			return
+	// 创建默认管理员账户
+	log.Println("Creating default admin account...")
+
+	// 创建默认管理员账户
+	hashedPassword, err := utils.HashPassword("admin")
+	if err != nil {
+		log.Println("Failed to hash admin password:", err)
+		return
+	}
+
+	if result.Error == nil {
+		// 更新现有用户的用户名和密码
+		adminUser.Username = "admin"
+		adminUser.Password = hashedPassword
+		if err := DB.Save(&adminUser).Error; err != nil {
+			log.Println("Failed to update admin account:", err)
+		} else {
+			log.Println("Default admin account updated successfully")
 		}
-
+	} else {
+		// 创建新用户
 		admin := models.User{
 			Username: "admin",
 			Email:    "admin@nav.local",

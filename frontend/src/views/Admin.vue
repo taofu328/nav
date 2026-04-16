@@ -99,7 +99,7 @@
 
             <el-table :data="paginatedBookmarks" stripe style="width: 100%" @selection-change="handleSelectionChange">
               <el-table-column type="selection" width="55" />
-              <el-table-column prop="title" label="标题" width="200" />
+              <el-table-column prop="title" label="标题" width="150" />
               <el-table-column label="图标" width="80" align="center">
                 <template #default="{ row }">
                   <img
@@ -110,7 +110,7 @@
                   />
                 </template>
               </el-table-column>
-              <el-table-column prop="url" label="网址" min-width="250">
+              <el-table-column prop="url" label="网址" min-width="200">
                 <template #default="{ row }">
                   <a :href="row.url" target="_blank" class="text-blue-600 hover:underline">
                     {{ row.url }}
@@ -120,7 +120,7 @@
               <el-table-column prop="category.name" label="分类" width="120" />
               <el-table-column prop="sort_order" label="排序" width="80" align="center" />
               <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
-              <el-table-column prop="visit_count" label="访问次数" width="100" align="center" />
+
               <el-table-column label="操作" width="180">
                 <template #default="{ row }">
                   <el-button @click="editBookmark(row)" type="primary" size="small">
@@ -172,7 +172,23 @@
               </el-button>
             </div>
 
-            <el-table :data="categories" stripe style="width: 100%">
+            <el-table 
+              ref="categoryTableRef"
+              :data="categories" 
+              stripe 
+              style="width: 100%"
+              row-key="id"
+            >
+              <el-table-column width="50" align="center">
+                <template #default="{ row }">
+                  <el-icon 
+                    :class="['cursor-move', row.is_default ? 'text-gray-400' : 'text-blue-600']"
+                    :disabled="row.is_default"
+                  >
+                    <Operation />
+                  </el-icon>
+                </template>
+              </el-table-column>
               <el-table-column prop="name" label="分类名称" width="200">
                 <template #default="{ row }">
                   <span v-if="row.is_default" class="text-blue-600 font-semibold">
@@ -484,10 +500,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import api from '@/utils/api'
+import Sortable from 'sortablejs'
 
 const router = useRouter()
 
@@ -508,6 +525,7 @@ const bookmarks = ref([])
 const adminUser = ref(null)
 const selectedBookmarks = ref([])
 const adminToken = ref('')
+const categoryTableRef = ref(null)
 
 const currentPage = ref(1)
 const pageSize = ref(20)
@@ -1394,6 +1412,158 @@ const handleCommand = (command) => {
   }
 }
 
+// 初始化SortableJS
+const initSortable = () => {
+  if (!categoryTableRef.value) return
+  
+  const table = categoryTableRef.value
+  const tbody = table.$el.querySelector('.el-table__body-wrapper tbody')
+  
+  if (!tbody) return
+  
+  // 销毁之前的Sortable实例
+  if (window.categorySortable) {
+    window.categorySortable.destroy()
+  }
+  
+  // 保存原始排序信息
+  const originalSortOrder = new Map()
+  
+  // 初始化SortableJS
+  window.categorySortable = Sortable.create(tbody, {
+    animation: 150, // 动画持续时间
+    ghostClass: 'sortable-ghost', // 拖动时的样式
+    chosenClass: 'sortable-chosen', // 选中时的样式
+    dragClass: 'sortable-drag', // 拖动中的样式
+    handle: '.cursor-move', // 拖动手柄
+    forceFallback: true, // 强制使用fallback模式
+    fallbackClass: 'sortable-fallback', // fallback模式的样式
+    fallbackOnBody: true, // fallback元素添加到body
+    fallbackTolerance: 3, // 鼠标移动多少像素才开始拖动
+    scroll: true, // 允许滚动
+    scrollSensitivity: 30, // 滚动灵敏度
+    scrollSpeed: 10, // 滚动速度
+    
+    // 开始拖动
+    onStart: function(evt) {
+      const draggedRow = categories.value[evt.oldIndex]
+      // 禁止拖动默认分类
+      if (draggedRow.is_default) {
+        evt.preventDefault()
+        ElMessage.warning('默认分类不可拖动')
+        return
+      }
+      // 保存原始排序信息
+      categories.value.forEach(category => {
+        originalSortOrder.set(category.id, category.sort_order)
+      })
+      // 添加拖动状态样式
+      evt.item.classList.add('opacity-50')
+    },
+    
+    // 结束拖动
+    onEnd: async function(evt) {
+      // 移除拖动状态样式
+      evt.item.classList.remove('opacity-50')
+      
+      const oldIndex = evt.oldIndex
+      const newIndex = evt.newIndex
+      
+      // 检查是否真的发生了位置变化
+      if (oldIndex === newIndex) return
+      
+      try {
+        // 获取拖动的分类和目标位置的分类
+        const draggedCategory = categories.value[oldIndex]
+        const targetCategory = categories.value[newIndex]
+        
+        // 检查目标分类是否是默认分类
+        if (targetCategory.is_default) {
+          // 恢复原始位置
+          categories.value.splice(oldIndex, 0, categories.value.splice(newIndex, 1)[0])
+          ElMessage.warning('默认分类不可作为目标位置')
+          return
+        }
+        
+        // 交换位置
+        categories.value.splice(newIndex, 0, categories.value.splice(oldIndex, 1)[0])
+        
+        // 重新计算排序值
+        categories.value.forEach((category, index) => {
+          category.sort_order = index + 1
+        })
+        
+        // 找出排序值发生变化的分类
+        const changedCategories = categories.value.filter(category => {
+          return originalSortOrder.get(category.id) !== category.sort_order
+        })
+        
+        // 保存到后端（只更新排序值发生变化的分类）
+        for (const category of changedCategories) {
+          await api.put(`/categories/${category.id}`, { sort_order: category.sort_order })
+        }
+        
+        ElMessage.success('分类排序已更新')
+      } catch (error) {
+        console.error('Failed to update category sort order:', error)
+        ElMessage.error('排序更新失败，请稍后重试')
+        // 重新加载数据恢复原始状态
+        await loadData()
+      }
+    }
+  })
+}
+
+// 拖动排序相关方法
+const draggingRow = ref(null)
+
+const handleRowDragStart = (row, column, event) => {
+  console.log("handleRowDragStart")
+  // 禁止拖动默认分类
+  if (row.is_default) {
+    event.preventDefault()
+    return
+  }
+  draggingRow.value = row
+  event.target.classList.add('opacity-50')
+}
+
+const handleRowDragEnd = (row, column, event) => {
+  draggingRow.value = null
+  event.target.classList.remove('opacity-50')
+}
+
+const handleRowDrop = async (draggedRow, targetRow, column, event) => {
+  console.log("handleRowDrop")
+  // 禁止拖动默认分类或拖动到默认分类
+  if (draggedRow.is_default || targetRow.is_default) {
+    ElMessage.warning('默认分类不可拖动')
+    return
+  }
+
+  try {
+    // 交换排序值
+    const tempSort = draggedRow.sort_order
+    draggedRow.sort_order = targetRow.sort_order
+    targetRow.sort_order = tempSort
+
+    // 保存到后端
+    await Promise.all([
+      api.put(`/categories/${draggedRow.id}`, { sort_order: draggedRow.sort_order }),
+      api.put(`/categories/${targetRow.id}`, { sort_order: targetRow.sort_order })
+    ])
+
+    // 重新加载数据以确保排序正确
+    await loadData()
+    ElMessage.success('分类排序已更新')
+  } catch (error) {
+    console.error('Failed to update category sort order:', error)
+    ElMessage.error('排序更新失败，请稍后重试')
+    // 重新加载数据恢复原始状态
+    await loadData()
+  }
+}
+
 const getIconUrl = (bookmark) => {
   if (bookmark.icon && bookmark.icon.startsWith('/api/icons/')) {
     return bookmark.icon
@@ -1417,13 +1587,14 @@ const loadData = async () => {
     ])
     categories.value = categoriesRes
     bookmarks.value = bookmarksRes
-    total.value = bookmarksRes.length
-    currentPage.value = 1
   } catch (error) {
     console.error('Failed to load data:', error)
-    ElMessage.error('加载数据失败')
   } finally {
     loading.value = false
+    // 初始化SortableJS
+    nextTick(() => {
+      initSortable()
+    })
   }
 }
 
@@ -1448,7 +1619,9 @@ onMounted(async () => {
       const savedSettings = response.settings
       Object.assign(settings, {
         siteTitle: savedSettings.site_title || 'Van Nav',
-        siteLogo: savedSettings.site_logo || ''
+        siteDescription: savedSettings.site_description || '个人收藏网址导航',
+        siteLogo: savedSettings.site_logo || '',
+        pageSize: savedSettings.page_size || 20
       })
       Object.assign(siteSettings, {
         siteTitle: savedSettings.site_title || 'Van Nav',
@@ -1460,26 +1633,36 @@ onMounted(async () => {
         siteTitle: savedSettings.site_title || 'Van Nav',
         siteLogo: savedSettings.site_logo || ''
       }))
+      
+      // 更新页面标题
+      if (siteSettings.siteTitle) {
+        document.title = siteSettings.siteTitle
+      }
     }
   } catch (error) {
     console.error('Failed to load site settings:', error)
-    // 如果 API 请求失败，尝试从 localStorage 加载
-    const settingsData = localStorage.getItem('site_settings')
-    if (settingsData) {
-      const savedSettings = JSON.parse(settingsData)
-      Object.assign(settings, savedSettings)
-      Object.assign(siteSettings, {
-        siteTitle: savedSettings.siteTitle || 'Van Nav',
-        siteLogo: savedSettings.siteLogo || ''
-      })
-    }
   }
   
-  loadData()
+  await loadData()
 })
 </script>
 
 <style scoped>
+/* 动画效果 */
+.sortable-ghost {
+  opacity: 0.5;
+  background: #f0f0f0;
+}
+
+.sortable-chosen {
+  background: #e6f7ff;
+}
+
+.sortable-drag {
+  opacity: 0.8;
+  background: #e6f7ff;
+}
+
 .batch-progress-container {
   padding: 20px;
 }
@@ -1493,19 +1676,15 @@ onMounted(async () => {
   justify-content: space-between;
   margin-top: 10px;
   font-size: 14px;
-}
-
-.current {
-  color: #606266;
-}
-
-.percentage {
-  color: #409eff;
-  font-weight: bold;
+  color: #666;
 }
 
 .results-list {
+  border-top: 1px solid #e8e8e8;
+  padding-top: 20px;
   margin-top: 20px;
+  max-height: 300px;
+  overflow-y: auto;
 }
 
 .results-header {
@@ -1516,75 +1695,64 @@ onMounted(async () => {
   font-weight: bold;
 }
 
-.results-content {
-  max-height: 300px;
-  overflow-y: auto;
-}
-
 .result-item {
-  display: flex;
-  flex-direction: column;
   padding: 10px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   border-radius: 4px;
-  border-left: 3px solid #dcdfe6;
-  background-color: #f5f7fa;
+  border: 1px solid #e8e8e8;
 }
 
 .result-item.success {
-  border-left-color: #67c23a;
-  background-color: #f0f9ff;
+  border-color: #52c41a;
+  background-color: #f6ffed;
 }
 
 .result-item.failed {
-  border-left-color: #f56c6c;
-  background-color: #fef0f0;
+  border-color: #ff4d4f;
+  background-color: #fff1f0;
 }
 
 .result-title {
   font-weight: bold;
-  margin-bottom: 4px;
-  color: #303133;
+  margin-bottom: 5px;
 }
 
 .result-url {
   font-size: 12px;
-  color: #909399;
-  margin-bottom: 4px;
+  color: #666;
+  margin-bottom: 5px;
   word-break: break-all;
 }
 
 .result-status {
   display: flex;
   align-items: center;
-  margin-top: 4px;
-}
-
-.success-icon {
-  color: #67c23a;
-  margin-right: 4px;
-}
-
-.error-icon {
-  color: #f56c6c;
-  margin-right: 4px;
-}
-
-.result-status span {
   font-size: 12px;
+  margin-bottom: 5px;
 }
 
 .result-status .success {
-  color: #67c23a;
+  color: #52c41a;
 }
 
-.result-status .failed {
-  color: #f56c6c;
+.result-status .error {
+  color: #ff4d4f;
+}
+
+.success-icon {
+  color: #52c41a;
+  margin-right: 5px;
+}
+
+.error-icon {
+  color: #ff4d4f;
+  margin-right: 5px;
 }
 
 .result-error {
   font-size: 12px;
-  color: #f56c6c;
-  margin-top: 4px;
+  color: #ff4d4f;
+  margin-top: 5px;
+  word-break: break-all;
 }
 </style>
