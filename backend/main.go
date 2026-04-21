@@ -4,9 +4,9 @@ import (
 	"embed"
 	"flag"
 	"io/fs"
-	"log"
 	"nav-backend/database"
 	"nav-backend/handlers"
+	"nav-backend/logger"
 	"nav-backend/middleware"
 	"nav-backend/utils"
 	"net/http"
@@ -69,7 +69,7 @@ func main() {
 	// 获取嵌入的dist文件系统
 	embeddedFS, err := fs.Sub(distFS, "dist")
 	if err != nil {
-		log.Fatal("Failed to create sub filesystem:", err)
+		logger.Fatal("Failed to create sub filesystem: %v", err)
 	}
 
 	// 提供静态文件服务
@@ -110,6 +110,6 @@ func main() {
 
 	// 使用命令行参数或环境变量指定的端口
 	portValue := utils.GetEnv("PORT", *port)
-	log.Printf("Server starting on port %s...", portValue)
+	logger.Info("Server starting on port %s...", portValue)
 	r.Run(":" + portValue)
 }

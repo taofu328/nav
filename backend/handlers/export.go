@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"log"
 	"nav-backend/database"
+	"nav-backend/logger"
 	"nav-backend/models"
 
 	"github.com/gin-gonic/gin"
@@ -90,7 +90,7 @@ func ExportDataHandler(c *gin.Context) {
 		Bookmarks:  exportBookmarks,
 	}
 
-	log.Printf("ExportData: exported %d categories and %d bookmarks", len(exportCategories), len(exportBookmarks))
+	logger.Info("ExportData: exported %d categories and %d bookmarks", len(exportCategories), len(exportBookmarks))
 
 	c.JSON(200, exportData)
 }
@@ -131,17 +131,17 @@ func ImportDataHandler(c *gin.Context) {
 				}
 				categoryMap[category.ID] = &existingCategory.ID
 				categoryNameMap[category.Name] = &existingCategory.ID
-				log.Printf("ImportData: Updated category '%s'", category.Name)
+				logger.Info("ImportData: Updated category '%s'", category.Name)
 			case "skip":
 				// 跳过现有分类
 				categoryMap[category.ID] = &existingCategory.ID
 				categoryNameMap[category.Name] = &existingCategory.ID
-				log.Printf("ImportData: Skipped existing category '%s'", category.Name)
+				logger.Info("ImportData: Skipped existing category '%s'", category.Name)
 			case "merge":
 				// 合并分类（使用现有分类）
 				categoryMap[category.ID] = &existingCategory.ID
 				categoryNameMap[category.Name] = &existingCategory.ID
-				log.Printf("ImportData: Merged with existing category '%s'", category.Name)
+				logger.Info("ImportData: Merged with existing category '%s'", category.Name)
 			default:
 				tx.Rollback()
 				c.JSON(400, gin.H{"error": "Invalid conflict strategy"})
@@ -163,7 +163,7 @@ func ImportDataHandler(c *gin.Context) {
 			}
 			categoryMap[category.ID] = &newCategory.ID
 			categoryNameMap[category.Name] = &newCategory.ID
-			log.Printf("ImportData: Created new category '%s' with ID %d", category.Name, newCategory.ID)
+			logger.Info("ImportData: Created new category '%s' with ID %d", category.Name, newCategory.ID)
 		}
 	}
 
@@ -196,13 +196,13 @@ func ImportDataHandler(c *gin.Context) {
 					return
 				}
 				bookmarkCount++
-				log.Printf("ImportData: Updated bookmark '%s'", bookmark.Title)
+				logger.Info("ImportData: Updated bookmark '%s'", bookmark.Title)
 			case "skip":
 				// 跳过现有书签
-				log.Printf("ImportData: Skipped existing bookmark '%s'", bookmark.Title)
+				logger.Info("ImportData: Skipped existing bookmark '%s'", bookmark.Title)
 			case "merge":
 				// 合并书签（使用现有书签）
-				log.Printf("ImportData: Merged with existing bookmark '%s'", bookmark.Title)
+				logger.Info("ImportData: Merged with existing bookmark '%s'", bookmark.Title)
 			default:
 				tx.Rollback()
 				c.JSON(400, gin.H{"error": "Invalid conflict strategy"})
@@ -230,12 +230,12 @@ func ImportDataHandler(c *gin.Context) {
 				return
 			}
 			bookmarkCount++
-			log.Printf("ImportData: Created new bookmark '%s'", bookmark.Title)
+			logger.Info("ImportData: Created new bookmark '%s'", bookmark.Title)
 		}
 	}
 
 	tx.Commit()
-	log.Printf("ImportData: Imported %d categories and %d bookmarks", len(req.Data.Categories), bookmarkCount)
+	logger.Info("ImportData: Imported %d categories and %d bookmarks", len(req.Data.Categories), bookmarkCount)
 
 	c.JSON(200, gin.H{
 		"message":    "Data imported successfully",

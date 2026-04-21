@@ -1,16 +1,14 @@
 package database
 
 import (
-	"database/sql"
-	"log"
 	"nav-backend/config"
+	"nav-backend/logger"
 	"nav-backend/models"
 	"nav-backend/utils"
 
-	"gorm.io/driver/sqlite"
+	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
-	_ "modernc.org/sqlite"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 var DB *gorm.DB
@@ -22,18 +20,11 @@ func InitDB() {
 	}
 
 	var err error
-	sqlDB, err := sql.Open("sqlite", dbPath+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)")
-	if err != nil {
-		log.Fatal("Failed to open database:", err)
-	}
-
-	DB, err = gorm.Open(sqlite.Dialector{
-		Conn: sqlDB,
-	}, &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+	DB, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+		Logger: gormlogger.Default.LogMode(gormlogger.Info),
 	})
 	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
+		logger.Fatal("Failed to connect to database: %v", err)
 	}
 
 	err = DB.AutoMigrate(
@@ -43,60 +34,44 @@ func InitDB() {
 		&models.SiteSetting{},
 	)
 	if err != nil {
-		log.Fatal("Failed to migrate database:", err)
+		logger.Fatal("Failed to migrate database: %v", err)
 	}
 
 	// 检查是否需要创建默认管理员账户
 	createDefaultAdminIfNeeded()
 
-	log.Println("Database initialized successfully")
+	logger.Info("Database initialized successfully")
 }
 
 func createDefaultAdminIfNeeded() {
-	// 检查是否已经存在admin用户
-	var adminUser models.User
-	result := DB.Where("username = ?", "admin").First(&adminUser)
-
-	// 打印查询结果
-	if result.Error == nil {
-		log.Println("Admin user already exists:", adminUser.Username)
+	var userCount int64
+	if err := DB.Model(&models.User{}).Count(&userCount).Error; err != nil {
+		logger.Error("Failed to check user count: %v", err)
 		return
 	}
 
-	// 尝试通过邮箱查找用户
-	result = DB.Where("email = ?", "admin@nav.local").First(&adminUser)
+	if userCount > 0 {
+		logger.Info("Users already exist, skipping default admin creation")
+		return
+	}
 
-	// 创建默认管理员账户
-	log.Println("Creating default admin account...")
+	logger.Info("No users found, creating default admin account...")
 
-	// 创建默认管理员账户
 	hashedPassword, err := utils.HashPassword("admin")
 	if err != nil {
-		log.Println("Failed to hash admin password:", err)
+		logger.Error("Failed to hash admin password: %v", err)
 		return
 	}
 
-	if result.Error == nil {
-		// 更新现有用户的用户名和密码
-		adminUser.Username = "admin"
-		adminUser.Password = hashedPassword
-		if err := DB.Save(&adminUser).Error; err != nil {
-			log.Println("Failed to update admin account:", err)
-		} else {
-			log.Println("Default admin account updated successfully")
-		}
-	} else {
-		// 创建新用户
-		admin := models.User{
-			Username: "admin",
-			Email:    "admin@nav.local",
-			Password: hashedPassword,
-		}
+	admin := models.User{
+		Username: "admin",
+		Email:    "admin@nav.local",
+		Password: hashedPassword,
+	}
 
-		if err := DB.Create(&admin).Error; err != nil {
-			log.Println("Failed to create admin account:", err)
-		} else {
-			log.Println("Default admin account created successfully")
-		}
+	if err := DB.Create(&admin).Error; err != nil {
+		logger.Error("Failed to create admin account: %v", err)
+	} else {
+		logger.Info("Default admin account created successfully")
 	}
 }
